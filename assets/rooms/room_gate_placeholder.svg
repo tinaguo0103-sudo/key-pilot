@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="gate room combat background placeholder">
+  <defs>
+    <linearGradient id="floor" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#1a2728"/>
+      <stop offset=".52" stop-color="#253033"/>
+      <stop offset="1" stop-color="#11181c"/>
+    </linearGradient>
+    <radialGradient id="centerLight" cx=".5" cy=".55" r=".55">
+      <stop offset="0" stop-color="#24494d" stop-opacity=".72"/>
+      <stop offset=".58" stop-color="#102126" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#020608" stop-opacity=".92"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="720" fill="#05090c"/>
+  <rect x="68" y="52" width="1144" height="616" fill="url(#floor)" stroke="#26383c" stroke-width="18"/>
+  <rect x="68" y="52" width="1144" height="616" fill="url(#centerLight)"/>
+  <g opacity=".42" stroke="#4b5c5e" stroke-width="3">
+    <path d="M190 52v616M330 52v616M470 52v616M610 52v616M750 52v616M890 52v616M1030 52v616"/>
+    <path d="M68 152h1144M68 252h1144M68 352h1144M68 452h1144M68 552h1144"/>
+  </g>
+  <g opacity=".28" stroke="#101619" stroke-width="16">
+    <path d="M108 86c58 43 124 50 186 35m650 511c73-55 142-73 223-47M183 629c61-63 145-92 240-86"/>
+  </g>
+  <g fill="#12191d" stroke="#526367" stroke-width="8">
+    <rect x="472" y="32" width="336" height="96" rx="10"/>
+    <rect x="492" y="52" width="296" height="58" rx="4" fill="#2b2721" stroke="#8b7041"/>
+    <rect x="480" y="604" width="320" height="90" rx="10"/>
+  </g>
+  <g fill="#11191d" stroke="#26383c" stroke-width="9">
+    <rect x="36" y="200" width="96" height="260" rx="14"/>
+    <rect x="1148" y="200" width="96" height="260" rx="14"/>
+  </g>
+  <g opacity=".78">
+    <rect x="104" y="462" width="1072" height="18" fill="#1b2020"/>
+    <path d="M300 462h68l-18 18h-68zm106 0h68l-18 18h-68zm106 0h68l-18 18h-68zm106 0h68l-18 18h-68zm106 0h68l-18 18h-68z" fill="#94783e"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M142 148c92 40 153 48 252 26" stroke="#293f32" stroke-width="20"/>
+    <path d="M936 166c89-21 151-11 207 32" stroke="#30453c" stroke-width="18"/>
+    <path d="M858 602c108-78 178-92 298-58" stroke="#3c2d22" stroke-width="16"/>
+    <path d="M188 612c109-59 202-72 312-39" stroke="#3a2e25" stroke-width="14"/>
+  </g>
+  <g fill="#ff625c" opacity=".8">
+    <rect x="608" y="636" width="64" height="18" rx="4"/>
+    <rect x="82" y="324" width="18" height="50" rx="4"/>
+    <rect x="1180" y="324" width="18" height="50" rx="4"/>
+  </g>
+  <g fill="#62ff9d" opacity=".42">
+    <circle cx="196" cy="142" r="12"/>
+    <circle cx="1064" cy="176" r="10"/>
+    <circle cx="948" cy="610" r="14"/>
+  </g>
+</svg>

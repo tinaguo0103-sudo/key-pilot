@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="hit spark placeholder">
+  <defs>
+    <filter id="sparkGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#sparkGlow)" stroke-linecap="round">
+    <path d="M128 128L54 70M128 128l92-42M128 128l70 82M128 128l-76 54M128 128l-8-94M128 128l18 94" stroke="#ffd66e" stroke-width="12"/>
+    <path d="M128 128l-42-12M128 128l44-18M128 128l-24 45M128 128l49 30" stroke="#45f7e4" stroke-width="7"/>
+    <circle cx="128" cy="128" r="24" fill="#fff4a8"/>
+    <circle cx="128" cy="128" r="46" fill="none" stroke="#ff625c" stroke-width="5" opacity=".65"/>
+  </g>
+</svg>

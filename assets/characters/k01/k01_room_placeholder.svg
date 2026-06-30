@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="K-01 room combat placeholder sprite">
+  <defs>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="armor" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#1e3940"/>
+      <stop offset="0.52" stop-color="#38464a"/>
+      <stop offset="1" stop-color="#11191d"/>
+    </linearGradient>
+    <linearGradient id="cyanGlow" x1="0" x2="1">
+      <stop offset="0" stop-color="#35eadc"/>
+      <stop offset="1" stop-color="#9df8ff"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="110" cy="176" rx="63" ry="18" fill="#020608" opacity=".48"/>
+  <path d="M59 100c-16 9-31 23-38 43l25 8 29-36z" fill="#2fc8c0" opacity=".92"/>
+  <path d="M161 100c17 9 31 24 38 44l-26 7-28-36z" fill="#2fc8c0" opacity=".92"/>
+  <path d="M67 76c3-19 18-34 43-34s42 15 45 34v29H67z" fill="#10252c" stroke="#74e4f0" stroke-width="5"/>
+  <path d="M82 84h18v12H82zm38 0h18v12h-18z" fill="#66ff9e" filter="url(#softGlow)"/>
+  <path d="M66 112h88c9 0 15 7 15 16v47H51v-47c0-9 6-16 15-16z" fill="url(#armor)" stroke="#ffd66e" stroke-width="5"/>
+  <path d="M110 130l24 24-24 24-24-24z" fill="#14323a" stroke="url(#cyanGlow)" stroke-width="5" filter="url(#softGlow)"/>
+  <path d="M78 176h26v29H78zm38 0h26v29h-26z" fill="#5fd3de"/>
+  <path d="M78 196h26v12H78zm38 0h26v12h-26z" fill="#214047"/>
+  <path d="M106 38l4-20 5 20 13 11-18 9-17-9z" fill="#18252b" stroke="#ffd66e" stroke-width="4"/>
+  <path d="M44 121l-9 39m141-39l10 39" stroke="#0d2027" stroke-width="9" stroke-linecap="round"/>
+  <path d="M58 109l-28 34m132-34l29 34" stroke="#49f0e2" stroke-width="5" opacity=".55" stroke-linecap="round"/>
+</svg>

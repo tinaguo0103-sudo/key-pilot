@@ -1,0 +1,21 @@
+{
+  "name": "key-pilot-typing-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "python3 -m http.server 4173",
+    "desktop": "node scripts/build_single_file.js && electron .",
+    "desktop:src": "KEY_PILOT_ENTRY=index.html electron .",
+    "desktop:package": "node scripts/package_desktop_app.mjs",
+    "desktop:zip": "npm run desktop:internal",
+    "desktop:internal": "node scripts/package_internal_zip.mjs",
+    "build:single": "node scripts/build_single_file.js",
+    "check": "node --check app.js && node --check assetManifest.js && node --check runtimeLifecycle.js && node --check debugBridge.js && node --check roomCombatScene.js && node --check cruiseDefenseScene.js && node --check electron/main.cjs && node --check scripts/asset_runtime_paths.mjs && node --check scripts/build_single_file.js && node --check scripts/check_assets.js && node --check scripts/check_distribution.js && node --check scripts/generate_audio_assets.mjs && node --check scripts/package_desktop_app.mjs && node --check scripts/package_internal_zip.mjs && node --check scripts/regression_single_file.mjs && node scripts/check_assets.js && node scripts/build_single_file.js && node scripts/check_distribution.js",
+    "regression": "node scripts/build_single_file.js && node scripts/regression_single_file.mjs"
+  },
+  "devDependencies": {
+    "electron": "^42.5.0"
+  }
+}
