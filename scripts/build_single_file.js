@@ -46,6 +46,7 @@ const phaser = read("vendor/phaser.min.js");
 const manifest = inlineManifestAssets(read("assetManifest.js"));
 const runtimeLifecycle = read("runtimeLifecycle.js");
 const debugBridge = read("debugBridge.js");
+const progressStore = read("progressStore.js");
 const roomScene = read("roomCombatScene.js");
 const cruiseScene = read("cruiseDefenseScene.js");
 const app = read("app.js");
@@ -73,6 +74,9 @@ ${runtimeLifecycle}
     </script>
     <script>
 ${debugBridge}
+    </script>
+    <script>
+${progressStore}
     </script>
     <script>
 ${roomScene}
