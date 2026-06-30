@@ -47,6 +47,7 @@ const manifest = inlineManifestAssets(read("assetManifest.js"));
 const runtimeLifecycle = read("runtimeLifecycle.js");
 const debugBridge = read("debugBridge.js");
 const progressStore = read("progressStore.js");
+const cruiseRules = read("cruiseRules.js");
 const roomScene = read("roomCombatScene.js");
 const cruiseScene = read("cruiseDefenseScene.js");
 const app = read("app.js");
@@ -77,6 +78,9 @@ ${debugBridge}
     </script>
     <script>
 ${progressStore}
+    </script>
+    <script>
+${cruiseRules}
     </script>
     <script>
 ${roomScene}
