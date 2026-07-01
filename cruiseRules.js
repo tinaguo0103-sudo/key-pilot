@@ -13,6 +13,7 @@
     const threatTypes = options.threatTypes || [];
     const lanes = options.lanes || [];
     const fingerWeights = options.fingerWeights || {};
+    const random = options.random || Math.random;
     const makeBalancedSideOrder = options.makeBalancedSideOrder;
     const now = options.now || (() => Date.now());
 
@@ -106,7 +107,7 @@
         };
       });
       const totalScore = scored.reduce((sum, item) => sum + item.score, 0);
-      let roll = Math.random() * totalScore;
+      let roll = random() * totalScore;
       for (const item of scored) {
         roll -= item.score;
         if (roll <= 0) return item.guide;

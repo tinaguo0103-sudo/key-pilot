@@ -1,327 +1,41 @@
-const STORAGE_KEY = "key-pilot-results-v1";
-const INVENTORY_KEY = "key-pilot-inventory-v1";
-const AUDIO_PREFS_KEY = "key-pilot-audio-prefs-v1";
-const LOW_HEALTH_THRESHOLD = 40;
-const CRITICAL_HEALTH_THRESHOLD = 30;
-const HULL_DAMAGE_PER_BREACH = 18;
-const HOME_SCENE_BG_KEY = "key-pilot-preflight-chamber-v03";
-const HOME_K01_TEXTURE_KEY = "key-pilot-k01-concept-v03";
-const RUNTIME_PARAMS = new URLSearchParams(window.location.search);
-const IS_DESKTOP_RUNTIME = RUNTIME_PARAMS.has("desktop") || RUNTIME_PARAMS.get("runtime") === "electron";
-const BUILD_LABEL = "v0.7.6 POUNCE-DEATH";
+const {
+  STORAGE_KEY,
+  INVENTORY_KEY,
+  AUDIO_PREFS_KEY,
+  LOW_HEALTH_THRESHOLD,
+  CRITICAL_HEALTH_THRESHOLD,
+  HULL_DAMAGE_PER_BREACH,
+  HOME_SCENE_BG_KEY,
+  HOME_K01_TEXTURE_KEY,
+  RUNTIME_PARAMS,
+  IS_DESKTOP_RUNTIME,
+  BUILD_LABEL,
+  HOME_KEYS,
+  KEYBOARD_ROWS,
+  FINGER_GROUPS,
+  FINGER_GUIDES,
+  FINGER_GUIDE_BY_ID,
+  STRIKE_CALIBRATION_DRILLS,
+  EQUIPMENT_PREVIEW,
+  STRIKE_MODIFIERS,
+  STRIKE_COMBAT_RULES,
+  STRIKE_MONSTER_VARIANTS,
+  DRIFT_LEFT_MAP,
+  FEEDBACK,
+  CRUISE_TARGET_COUNT,
+  CRUISE_INTRO_MS,
+  CRUISE_WAVE_DEADLINES,
+  CRUISE_ROUND_SIZES,
+  CRUISE_ROUND_RHYTHMS,
+  CRUISE_THREAT_TYPES,
+  CRUISE_LANES,
+  CRUISE_FINGER_WEIGHTS,
+  LEVELS,
+  STRIKE_ROOM_THEMES,
+  STRIKE_ROOM_CHAIN
+} = window.KeyPilotConfig;
+
 let runSequence = 0;
-
-const HOME_KEYS = ["a", "s", "d", "f", "j", "k", "l", ";"];
-const KEYBOARD_ROWS = [
-  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-  ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";"],
-  ["z", "x", "c", "v", "b", "n", "m", ",", "."]
-];
-
-const FINGER_GROUPS = [
-  { id: "left-pinky", side: "left", hand: "左手", finger: "小指", arm: "左小指边界臂", home: "a", keys: ["q", "a", "z"], visualRows: [["q"], ["a"], ["z"]], color: "#ff8f70", phaserColor: 0xff8f70 },
-  { id: "left-ring", side: "left", hand: "左手", finger: "无名指", arm: "左无名指侧墙臂", home: "s", keys: ["w", "s", "x"], visualRows: [["w"], ["s"], ["x"]], color: "#ffb95f", phaserColor: 0xffb95f },
-  { id: "left-middle", side: "left", hand: "左手", finger: "中指", arm: "左中指上层臂", home: "d", keys: ["e", "d", "c"], visualRows: [["e"], ["d"], ["c"]], color: "#8ea7ff", phaserColor: 0x8ea7ff },
-  { id: "left-index", side: "left", hand: "左手", finger: "食指", arm: "左食指突击臂", home: "f", keys: ["r", "t", "f", "g", "v", "b"], visualRows: [["r", "t"], ["f", "g"], ["v", "b"]], color: "#ffd66e", phaserColor: 0xffd66e },
-  { id: "right-index", side: "right", hand: "右手", finger: "食指", arm: "右食指突击臂", home: "j", keys: ["y", "u", "h", "j", "n", "m"], visualRows: [["y", "u"], ["h", "j"], ["n", "m"]], color: "#ffd66e", phaserColor: 0xffd66e },
-  { id: "right-middle", side: "right", hand: "右手", finger: "中指", arm: "右中指上层臂", home: "k", keys: ["i", "k", ","], visualRows: [["i"], ["k"], [","]], color: "#8ea7ff", phaserColor: 0x8ea7ff },
-  { id: "right-ring", side: "right", hand: "右手", finger: "无名指", arm: "右无名指侧墙臂", home: "l", keys: ["o", "l", "."], visualRows: [["o"], ["l"], ["."]], color: "#ffb95f", phaserColor: 0xffb95f },
-  { id: "right-pinky", side: "right", hand: "右手", finger: "小指", arm: "右小指边界臂", home: ";", keys: ["p", ";"], visualRows: [["p"], [";"]], color: "#ff8f70", phaserColor: 0xff8f70 }
-];
-
-const FINGER_GUIDES = FINGER_GROUPS.reduce((map, guide) => {
-  guide.keys.forEach((key) => {
-    map[key] = guide;
-  });
-  return map;
-}, {});
-
-const FINGER_GUIDE_BY_ID = FINGER_GROUPS.reduce((map, guide) => {
-  map[guide.id] = guide;
-  return map;
-}, {});
-
-const STRIKE_CALIBRATION_DRILLS = [
-  { guideId: "left-index", pattern: ["f", "r", "f"], objective: "左食指从 F 基地出击到 R，再收回 F。" },
-  { guideId: "right-index", pattern: ["j", "u", "j"], objective: "右食指从 J 基地出击到 U，再收回 J。" },
-  { guideId: "left-middle", pattern: ["d", "e", "d"], objective: "左中指从 D 基地出击到 E，再收回 D。" },
-  { guideId: "right-middle", pattern: ["k", "i", "k"], objective: "右中指从 K 基地出击到 I，再收回 K。" },
-  { guideId: "left-ring", pattern: ["s", "w", "s"], objective: "左无名指从 S 基地出击到 W，再收回 S。" },
-  { guideId: "right-ring", pattern: ["l", "o", "l"], objective: "右无名指从 L 基地出击到 O，再收回 L。" },
-  { guideId: "left-pinky", pattern: ["a", "q", "a"], objective: "左小指从 A 边界出击到 Q，再收回 A。" },
-  { guideId: "right-pinky", pattern: [";", "p", ";"], objective: "右小指从 ; 边界出击到 P，再收回 ;。" },
-  { guideId: "left-index", pattern: ["f", "v", "f"], objective: "左食指下探 V，确认同一根手指能上下出击。" },
-  { guideId: "right-index", pattern: ["j", "m", "j"], objective: "右食指下探 M，命中后回到 J 基地。" },
-  { guideId: "left-middle", pattern: ["d", "c", "d"], objective: "左中指下探 C，手掌不要整体漂移。" },
-  { guideId: "right-middle", pattern: ["k", ",", "k"], objective: "右中指下探逗号，回收时锁回 K。" },
-  { guideId: "left-ring", pattern: ["s", "x", "s"], objective: "左无名指下探 X，慢一点也要回 S。" },
-  { guideId: "right-ring", pattern: ["l", ".", "l"], objective: "右无名指下探句点，回收时锁回 L。" },
-  { guideId: "left-pinky", pattern: ["a", "z", "a"], objective: "左小指下探 Z，边界键先求稳。" },
-  { guideId: "right-pinky", pattern: [";", "p", ";"], objective: "右小指再确认 P，边界臂接入完成。" }
-];
-
-const EQUIPMENT_PREVIEW = [
-  { name: "锚点心脏", slot: "核心", hint: "偏移时强制高亮 F/J", sources: ["锚点芯片碎片", "稳定核心样本", "残影污染样本"] },
-  { name: "返航钩爪", slot: "机械臂", hint: "回家阶段显示返航轨道", sources: ["返航钩爪碎片", "机械臂润滑剂", "清障战斗记录"] },
-  { name: "护盾电容", slot: "护盾", hint: "抵消一次普通错误护盾损失", sources: ["无破舱徽记", "漂移僵尸图鉴", "漂移僵尸图鉴更新"] }
-];
-
-const STRIKE_MODIFIERS = [
-  { id: "rush", label: "突进", hint: "怪物会迅速贴近，错键压力更大" },
-  { id: "shield", label: "装甲", hint: "命中窗口更厚重，回家必须干净" },
-  { id: "glitch", label: "闪断", hint: "隧道干扰更强，错误会污染屏幕" },
-  { id: "split", label: "分裂", hint: "残影增多，目标键需要更稳" }
-];
-
-const STRIKE_COMBAT_RULES = {
-  rush: {
-    label: "突进压迫",
-    hint: "错键会让怪物大幅贴近，先稳住基地再出击。",
-    pressure: 13
-  },
-  shield: {
-    label: "装甲二连",
-    hint: "命中后回家，再补第二击，完整闭环才清除。",
-    pressure: 9
-  },
-  glitch: {
-    label: "闪断干扰",
-    hint: "污染增长更快，回家阶段错键会更危险。",
-    pressure: 11
-  },
-  split: {
-    label: "分裂残影",
-    hint: "同一根手指连续处理两个目标，中间必须回家。",
-    pressure: 10
-  }
-};
-
-const STRIKE_MONSTER_VARIANTS = {
-  "食指臂": ["漂移僵尸", "铁皮行尸", "跳频残骸"],
-  "中指臂": ["上层爬行者", "倒挂腐蚀体", "电弧残影"],
-  "无名指臂": ["侧墙怪", "裂相幽影", "管线怨影"],
-  "小指边界": ["边界虫", "闸门僵尸", "边线污染体"]
-};
-
-const DRIFT_LEFT_MAP = {
-  j: "h",
-  k: "j",
-  l: "k",
-  ";": "l",
-  f: "d",
-  d: "s",
-  s: "a"
-};
-
-const CRUISE_TARGET_COUNT = 71;
-const CRUISE_INTRO_MS = 3200;
-const CRUISE_WAVE_DEADLINES = [3400, 2950, 2450];
-const CRUISE_ROUND_SIZES = [5, 5, 5, 6, 6, 7, 7, 8, 10, 12];
-const CRUISE_ROUND_RHYTHMS = [
-  { id: "warmup", label: "接触巡航", deadlineScale: 1.06, laneDrift: 0.7 },
-  { id: "crossfire", label: "交叉火线", deadlineScale: 1, laneDrift: 1 },
-  { id: "surge", label: "加速巡航", deadlineScale: 0.92, laneDrift: 1.2 },
-  { id: "overdrive", label: "过载长串", deadlineScale: 0.86, laneDrift: 1.45 }
-];
-const CRUISE_THREAT_TYPES = ["projectile", "turret", "swarm"];
-const CRUISE_LANES = [
-  { id: "left-high", side: "left", label: "左上管线" },
-  { id: "left-mid", side: "left", label: "左侧闸门" },
-  { id: "left-low", side: "left", label: "左下管线" },
-  { id: "right-high", side: "right", label: "右上管线" },
-  { id: "right-mid", side: "right", label: "右侧闸门" },
-  { id: "right-low", side: "right", label: "右下管线" },
-  { id: "top", side: "top", label: "上层裂缝" },
-  { id: "bottom", side: "bottom", label: "下层排污口" }
-];
-
-const CRUISE_FINGER_WEIGHTS = {
-  "left-index": 3.6,
-  "right-index": 3.6,
-  "left-middle": 2.4,
-  "right-middle": 2.4,
-  "left-ring": 2,
-  "right-ring": 2,
-  "left-pinky": 1.7,
-  "right-pinky": 1.7
-};
-
-const LEVELS = [
-  {
-    id: "level-01-home",
-    index: "01",
-    title: "战前预检",
-    subtitle: "唤醒 K-01 的中排神经底座",
-    mission: "F/J 是开舱锁，真正任务是完成 8 个基准位设备预检。",
-    scene: "出战前-01 / 机库预检舱",
-    briefing: "开战前先把旧坐标残影从驾驶舱里清出去。锁定 F/J，再逐个点亮 A S D F / J K L ; 八个中排神经底座。",
-    durationSeconds: 60,
-    targetCount: 48,
-    mode: "home",
-    monster: "偏左残影",
-    rewardPool: ["锚点芯片碎片", "稳定核心样本", "残影污染样本"],
-    unlock: true,
-    segments: [
-      ["f", "j", "f", "j", "j", "f", "f", "j"],
-      ["f", "d", "j", "k", "d", "f", "k", "j", "f", "j"],
-      ["s", "d", "f", "j", "k", "l", "d", "k", "s", "l"],
-      ["a", "s", "d", "f", "j", "k", "l", ";", "f", "j", "a", ";"]
-    ],
-    waves: [
-      { name: "开舱锁", monster: "偏左残影", objective: "用 F/J 接通左右主锚，确认驾驶舱没有偏移", count: 8 },
-      { name: "内侧预检", monster: "错位虫群", objective: "D/K 接入神经底座，手掌不能整体偏左", count: 10 },
-      { name: "外侧预检", monster: "错位虫群", objective: "S/L 点亮稳定台，保持中轴不漂", count: 10 },
-      { name: "八键出舱许可", monster: "偏左残影", objective: "A S D F / J K L ; 全部亮起，准许进入清障隧道", count: 20 }
-    ],
-    goal: {
-      accuracy: 85,
-      maxHomeDrift: 8
-    }
-  },
-  {
-    id: "level-02-strike",
-    index: "02",
-    title: "机械臂清障",
-    subtitle: "击退隧道怪物，再把机械臂收回",
-    mission: "从基地出击，命中怪物，再回家。每条动作都要闭环。",
-    scene: "启动层-02 / 清障隧道",
-    briefing: "命中不是结束。机械臂打出去、击中、收回基地，三步完整才算清除一个怪物。",
-    durationSeconds: 110,
-    targetActions: 20,
-    mode: "strike",
-    monster: "漂移僵尸",
-    rewardPool: ["返航钩爪碎片", "机械臂润滑剂", "漂移僵尸图鉴"],
-    unlock: true,
-    waves: [
-      {
-        name: "食指臂",
-        monster: "漂移僵尸",
-        objective: "食指先清路：F/R/V 与 J/U/M，命中后必须回家",
-        count: 5,
-        patterns: [["f", "r", "f"], ["j", "u", "j"], ["f", "v", "f"], ["j", "m", "j"], ["f", "t", "f"]]
-      },
-      {
-        name: "中指臂",
-        monster: "上层爬行者",
-        objective: "中指接管 E/I/C/,，不要让手掌飘走",
-        count: 5,
-        patterns: [["d", "e", "d"], ["k", "i", "k"], ["d", "c", "d"], ["k", ",", "k"], ["d", "e", "d"]]
-      },
-      {
-        name: "无名指臂",
-        monster: "侧墙怪",
-        objective: "无名指处理 W/O/X/.，慢一点也要收臂",
-        count: 5,
-        patterns: [["s", "w", "s"], ["l", "o", "l"], ["s", "x", "s"], ["l", ".", "l"], ["s", "w", "s"]]
-      },
-      {
-        name: "小指边界",
-        monster: "边界虫",
-        objective: "小指清理 Q/P/Z，边界键不追速度",
-        count: 5,
-        patterns: [["a", "q", "a"], [";", "p", ";"], ["a", "z", "a"], [";", "p", ";"], ["a", "q", "a"]]
-      }
-    ],
-    goal: {
-      accuracy: 85,
-      pathCompleteRate: 80
-    }
-  },
-  {
-    id: "level-03-cruise",
-    index: "03",
-    title: "巡航防线",
-    subtitle: "多手指连续拦截，守住中轴手位",
-    mission: "污染弹体从多方向袭来。看中央目标键，在倒计时内用正确手指拦截。",
-    scene: "启动层-03 / 巡航防线舱",
-    briefing: "这一关不再固定同一条机械臂。K-01 会在防线中央连续接收威胁坐标，你需要用八根手指轮流拦截，同时随时回到中排基准位。",
-    durationSeconds: 360,
-    targetActions: CRUISE_TARGET_COUNT,
-    mode: "cruise",
-    monster: "污染弹体",
-    rewardPool: ["巡航防线记录", "多指同步芯片", "污染弹体残片"],
-    unlock: true,
-    waves: [
-      { name: "接触巡航", monster: "污染弹体", objective: "5 键短串起步，先把多手指巡航接上节奏", count: 20, deadlineMs: 3400 },
-      { name: "交叉火线", monster: "错位虫群", objective: "6-8 键中串，左右手连续切换但不丢中排", count: 24, deadlineMs: 2950 },
-      { name: "防线压缩", monster: "污染炮台", objective: "8-12 键长串压迫，守住中轴完成过载巡航", count: 27, deadlineMs: 2450 }
-    ],
-    goal: {
-      accuracy: 82,
-      interceptRate: 78,
-      maxTimeouts: 8
-    }
-  }
-];
-
-const FEEDBACK = {
-  correct: ["锁定", "稳定", "很好", "K-01 同步中"],
-  strike: ["出击", "命中", "收臂", "怪物清除"],
-  wrong: ["信号打滑了", "目标还在，重新出手", "别急，先稳住底座"],
-  drift: ["旧坐标残影接管了", "你刚才把基地搬家了", "左墙说它不想再被撞了", "重新锁回 F/J"],
-  returnHome: ["命中不算结束，收臂才算", "机械臂还挂在墙上", "先回基地"]
-};
-
-const STRIKE_ROOM_THEMES = [
-  { id: "gate", name: "闸门入口", code: "GATE", color: "cyan", briefing: "闸门锁死，漂移僵尸从地缝里爬出。" },
-  { id: "pipe", name: "腐蚀管道", code: "PIPE", color: "green", briefing: "管道腐蚀，铁皮行尸需要二连破甲。" },
-  { id: "nest", name: "侧墙巢穴", code: "NEST", color: "orange", briefing: "墙体吐出分裂残影，同一根手指必须连续处理。" },
-  { id: "blackout", name: "闪断隧道", code: "BLACKOUT", color: "blue", briefing: "照明闪断，突进感染体会在错键时逼近。" },
-  { id: "core", name: "旧坐标核心", code: "CORE", color: "red", briefing: "旧坐标核心暴露，所有闭环规则进入混合压力。" }
-];
-
-const STRIKE_ROOM_CHAIN = [
-  {
-    id: "gate",
-    monsterId: "driftZombie",
-    monster: "漂移僵尸",
-    mechanic: "standard",
-    patterns: [["f", "r", "f"], ["j", "u", "j"], ["d", "e", "d"]],
-    modifiers: ["rush", "glitch", "rush"],
-    lanes: ["mid", "high", "low"],
-    spawnSides: ["right", "top", "right"]
-  },
-  {
-    id: "pipe",
-    monsterId: "ironWalker",
-    monster: "铁皮行尸",
-    mechanic: "shield",
-    patterns: [["f", "r", "f"], ["j", "u", "j"], ["d", "e", "d"], ["k", "i", "k"]],
-    modifiers: ["shield", "shield", "shield", "shield"],
-    lanes: ["mid", "low", "high", "mid"],
-    spawnSides: ["right", "bottom", "right", "top"]
-  },
-  {
-    id: "nest",
-    monsterId: "splitPhantom",
-    monster: "分裂残影",
-    mechanic: "split",
-    patterns: [["f", "r", "f"], ["j", "u", "j"], ["s", "w", "s"], ["l", "o", "l"]],
-    modifiers: ["split", "split", "split", "split"],
-    lanes: ["high", "mid", "low", "mid"],
-    spawnSides: ["left", "right", "left", "right"]
-  },
-  {
-    id: "blackout",
-    monsterId: "rushCrawler",
-    monster: "突进感染体",
-    mechanic: "rush",
-    patterns: [["a", "q", "a"], [";", "p", ";"], ["d", "c", "d"], ["k", ",", "k"]],
-    modifiers: ["rush", "glitch", "rush", "glitch"],
-    lanes: ["low", "high", "mid", "low"],
-    spawnSides: ["top", "right", "left", "bottom"]
-  },
-  {
-    id: "core",
-    monsterId: "oldCoordinateCore",
-    monster: "旧坐标核心",
-    mechanic: "boss",
-    patterns: [["f", "t", "f"], ["j", "u", "j"], ["d", "e", "d"], ["k", "i", "k"], ["f", "r", "f"]],
-    modifiers: ["rush", "shield", "split", "glitch", "shield"],
-    lanes: ["mid", "high", "low", "mid", "mid"],
-    spawnSides: ["core", "core", "core", "core", "core"]
-  }
-];
 
 const app = document.querySelector("#app");
 
@@ -335,8 +49,11 @@ let shellShake = false;
 let sceneCanvasRaf = null;
 let sceneEffects = [];
 let phaserGame = null;
-let roomCombatEventId = 0;
-let cruiseCombatEventId = 0;
+const randomSource = window.KeyPilotRandomSource.createRandomSource({
+  storage: localStorage,
+  params: RUNTIME_PARAMS
+});
+const sceneBridge = window.KeyPilotSceneBridge.createSceneBridge();
 const finishLifecycle = window.KeyPilotRuntimeLifecycle.createDeferredFinishController({
   getState: () => state,
   getView: () => view,
@@ -450,6 +167,11 @@ const progressStore = window.KeyPilotProgress.createProgressStore({
   inventoryKey: INVENTORY_KEY,
   levels: LEVELS
 });
+const a11ySupport = window.KeyPilotA11ySupport.createA11ySupport({
+  getState: () => state,
+  getView: () => view,
+  formatKey
+});
 const cruiseRules = window.KeyPilotCruiseRules.createCruiseRules({
   keyboardRows: KEYBOARD_ROWS,
   fingerGroups: FINGER_GROUPS,
@@ -460,6 +182,7 @@ const cruiseRules = window.KeyPilotCruiseRules.createCruiseRules({
   threatTypes: CRUISE_THREAT_TYPES,
   lanes: CRUISE_LANES,
   fingerWeights: CRUISE_FINGER_WEIGHTS,
+  random: randomSource.random,
   makeBalancedSideOrder
 });
 const homeRules = window.KeyPilotHomeRules.createHomeRules({
@@ -477,6 +200,7 @@ const strikeRules = window.KeyPilotStrikeRules.createStrikeRules({
   roomChain: STRIKE_ROOM_CHAIN,
   shuffle,
   pick,
+  random: randomSource.random,
   makeShuffledRun,
   makeBalancedSideOrder,
   getFingerGuideForKey,
@@ -571,16 +295,11 @@ function formatKey(key) {
 }
 
 function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
+  return randomSource.pick(list);
 }
 
 function shuffle(list) {
-  const copy = list.slice();
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
-  }
-  return copy;
+  return randomSource.shuffle(list);
 }
 
 function makeShuffledRun(items, count, keyForItem = (item) => String(item), previousKey = "") {
@@ -690,7 +409,7 @@ function pickBalancedSideChunk(existing, leftCount, rightCount) {
 }
 
 function makeBalancedSideOrder(totalCount) {
-  const firstSide = Math.random() < 0.5 ? "left" : "right";
+  const firstSide = randomSource.random() < 0.5 ? "left" : "right";
   const counts = {
     left: Math.floor(totalCount / 2),
     right: Math.floor(totalCount / 2)
@@ -795,36 +514,18 @@ function triggerScene(eventName) {
 
 function queueRoomCombatEvent(type, detail = {}) {
   if (!state || state.level.mode !== "strike") return;
-  roomCombatEventId += 1;
-  const event = {
-    id: roomCombatEventId,
-    type,
+  sceneBridge.queue("room", type, detail, {
     sceneEvent: state.sceneEvent || "idle",
-    sceneNonce: state.sceneNonce,
-    at: performance.now(),
-    detail
-  };
-  const queue = Array.isArray(window.__KEY_PILOT_ROOM_EVENT_QUEUE__) ? window.__KEY_PILOT_ROOM_EVENT_QUEUE__ : [];
-  queue.push(event);
-  window.__KEY_PILOT_ROOM_EVENT_QUEUE__ = queue.slice(-16);
-  window.__KEY_PILOT_ROOM_EVENT__ = event;
+    sceneNonce: state.sceneNonce
+  });
 }
 
 function queueCruiseCombatEvent(type, detail = {}) {
   if (!state || state.level.mode !== "cruise") return;
-  cruiseCombatEventId += 1;
-  const event = {
-    id: cruiseCombatEventId,
-    type,
+  sceneBridge.queue("cruise", type, detail, {
     sceneEvent: state.sceneEvent || "idle",
-    sceneNonce: state.sceneNonce,
-    at: performance.now(),
-    detail
-  };
-  const queue = Array.isArray(window.__KEY_PILOT_CRUISE_EVENT_QUEUE__) ? window.__KEY_PILOT_CRUISE_EVENT_QUEUE__ : [];
-  queue.push(event);
-  window.__KEY_PILOT_CRUISE_EVENT_QUEUE__ = queue.slice(-20);
-  window.__KEY_PILOT_CRUISE_EVENT__ = event;
+    sceneNonce: state.sceneNonce
+  });
 }
 
 function combatEventForSceneEvent(fallback = "wrong-key") {
@@ -885,6 +586,7 @@ function resetTransientEffects() {
   pressedKey = "";
   flashType = "";
   shellShake = false;
+  sceneBridge.clearAll();
 }
 
 function isActivePlay(currentState = state) {
@@ -1446,6 +1148,7 @@ function startLevel(levelId) {
   clearDeferredFinishTimers();
   resetTransientEffects();
   selectedLevelId = level.id;
+  randomSource.reseed(`${level.id}:${runSequence + 1}`);
   state = makeInitialState(level);
   state.runId = ++runSequence;
   view = "playing";
@@ -1533,6 +1236,7 @@ function updateLiveCombatHud() {
     feedbackNode.className = `feedback-message ${state.feedbackType}`;
     feedbackNode.textContent = state.feedback;
   }
+  a11ySupport.sync();
 }
 
 function updateLiveCruiseHud() {
@@ -1558,6 +1262,7 @@ function updateLiveCruiseHud() {
     feedbackNode.className = `feedback-message ${state.feedbackType}`;
     feedbackNode.textContent = state.feedback;
   }
+  a11ySupport.sync();
 }
 
 function refreshLiveCombatSurface() {
@@ -1570,10 +1275,10 @@ function refreshLiveCombatSurface() {
   const height = Math.max(1, Math.round(rect.height || stage.clientHeight || 460));
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const snapshot = getStrikeSceneSnapshot(width, height, pixelRatio);
-  window.__KEY_PILOT_ROOM_SNAPSHOT__ = snapshot;
+  sceneBridge.setSnapshot("room", snapshot);
   const scene = phaserGame?.scene?.keys?.RoomCombatScene;
   if (scene?.updateSnapshot) {
-    const eventQueue = Array.isArray(window.__KEY_PILOT_ROOM_EVENT_QUEUE__) ? window.__KEY_PILOT_ROOM_EVENT_QUEUE__ : [];
+    const eventQueue = sceneBridge.getQueue("room");
     const preSnapshotEvents = eventQueue.filter((event) => event?.type !== "room-enter");
     const postSnapshotEvents = eventQueue.filter((event) => event?.type === "room-enter");
     if (scene.applyCombatEvent) {
@@ -1582,9 +1287,10 @@ function refreshLiveCombatSurface() {
     scene.updateSnapshot(snapshot);
     if (scene.applyCombatEvent) {
       postSnapshotEvents.forEach((event) => scene.applyCombatEvent(event));
-      window.__KEY_PILOT_ROOM_EVENT_QUEUE__ = [];
-      if (!eventQueue.length && window.__KEY_PILOT_ROOM_EVENT__) {
-        scene.applyCombatEvent(window.__KEY_PILOT_ROOM_EVENT__);
+      const latestEvent = sceneBridge.latest("room");
+      sceneBridge.clear("room");
+      if (!eventQueue.length && latestEvent) {
+        scene.applyCombatEvent(latestEvent);
       }
     }
     return;
@@ -1601,16 +1307,17 @@ function refreshLiveCruiseSurface() {
   const height = Math.max(1, Math.round(rect.height || stage.clientHeight || 460));
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const snapshot = getCruiseSceneSnapshot(width, height, pixelRatio);
-  window.__KEY_PILOT_CRUISE_SNAPSHOT__ = snapshot;
+  sceneBridge.setSnapshot("cruise", snapshot);
   const scene = phaserGame?.scene?.keys?.CruiseDefenseScene;
   if (scene?.updateSnapshot) {
-    const eventQueue = Array.isArray(window.__KEY_PILOT_CRUISE_EVENT_QUEUE__) ? window.__KEY_PILOT_CRUISE_EVENT_QUEUE__ : [];
+    const eventQueue = sceneBridge.getQueue("cruise");
     scene.updateSnapshot(snapshot);
     if (scene.applyCruiseEvent) {
       eventQueue.forEach((event) => scene.applyCruiseEvent(event));
-      window.__KEY_PILOT_CRUISE_EVENT_QUEUE__ = [];
-      if (!eventQueue.length && window.__KEY_PILOT_CRUISE_EVENT__) {
-        scene.applyCruiseEvent(window.__KEY_PILOT_CRUISE_EVENT__);
+      const latestEvent = sceneBridge.latest("cruise");
+      sceneBridge.clear("cruise");
+      if (!eventQueue.length && latestEvent) {
+        scene.applyCruiseEvent(latestEvent);
       }
     }
     return;
@@ -1669,6 +1376,7 @@ function isDrift(target, actual) {
 function setFeedback(message, type = "neutral") {
   state.feedback = message;
   state.feedbackType = type;
+  a11ySupport.announce(message);
   if (type !== "neutral") {
     pushEvent(message);
   }
@@ -2239,6 +1947,7 @@ function render(forceFull = false) {
   syncPhaserScene();
   syncAudioDirector();
   bootDesktopAudioIfNeeded();
+  a11ySupport.sync();
 }
 
 function syncSceneCanvasLoop() {
@@ -2306,6 +2015,7 @@ function updateLiveHomeHud() {
   if (vitals) vitals.outerHTML = renderVitals();
   const keyboard = document.querySelector(".keyboard-panel");
   if (keyboard) keyboard.outerHTML = renderKeyboardPanel();
+  a11ySupport.sync();
 }
 
 function refreshLiveHomeSurface() {
@@ -2317,6 +2027,7 @@ function refreshLiveHomeSurface() {
   const height = Math.max(1, Math.round(rect.height || stage.clientHeight || 460));
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const snapshot = getHomeSceneSnapshot(width, height, pixelRatio);
+  sceneBridge.setSnapshot("home", snapshot);
   const scene = phaserGame?.scene?.scenes?.[0];
   if (scene?.updateSnapshot && scene.__keyPilotMode === "home") {
     scene.updateSnapshot(snapshot);
@@ -2349,6 +2060,8 @@ function syncPhaserScene() {
   const snapshot = isCruise ? getCruiseSceneSnapshot(width, height, pixelRatio) : isStrike ? getStrikeSceneSnapshot(width, height, pixelRatio) : getHomeSceneSnapshot(width, height, pixelRatio);
   const useRoomCombatScene = isStrike && state.level.mode === "strike" && state.status === "playing" && window.RoomCombatScene;
   const useCruiseScene = isCruise && state.level.mode === "cruise" && state.status === "playing" && window.CruiseDefenseScene;
+  const useHomeScene = !isStrike && !isCruise && state.level.mode === "home" && window.HomePreflightScene;
+  if (useHomeScene) sceneBridge.setSnapshot("home", snapshot);
   if (!useRoomCombatScene && !useCruiseScene && stage.querySelector("canvas")) {
     const liveScene = phaserGame?.scene?.scenes?.[0];
     if (liveScene?.updateSnapshot && liveScene.__keyPilotMode === (isCruise ? "cruise" : isStrike ? "strike" : "home")) {
@@ -2357,32 +2070,34 @@ function syncPhaserScene() {
     }
   }
   if (useRoomCombatScene) {
-    window.__KEY_PILOT_ROOM_SNAPSHOT__ = snapshot;
+    sceneBridge.setSnapshot("room", snapshot);
     const liveScene = phaserGame?.scene?.keys?.RoomCombatScene;
     if (liveScene?.updateSnapshot && stage.querySelector("canvas")) {
       liveScene.updateSnapshot(snapshot);
       if (liveScene.applyCombatEvent) {
-        const eventQueue = Array.isArray(window.__KEY_PILOT_ROOM_EVENT_QUEUE__) ? window.__KEY_PILOT_ROOM_EVENT_QUEUE__ : [];
+        const eventQueue = sceneBridge.getQueue("room");
         eventQueue.forEach((event) => liveScene.applyCombatEvent(event));
-        window.__KEY_PILOT_ROOM_EVENT_QUEUE__ = [];
-        if (!eventQueue.length && window.__KEY_PILOT_ROOM_EVENT__) {
-          liveScene.applyCombatEvent(window.__KEY_PILOT_ROOM_EVENT__);
+        const latestEvent = sceneBridge.latest("room");
+        sceneBridge.clear("room");
+        if (!eventQueue.length && latestEvent) {
+          liveScene.applyCombatEvent(latestEvent);
         }
       }
       return;
     }
   }
   if (useCruiseScene) {
-    window.__KEY_PILOT_CRUISE_SNAPSHOT__ = snapshot;
+    sceneBridge.setSnapshot("cruise", snapshot);
     const liveScene = phaserGame?.scene?.keys?.CruiseDefenseScene;
     if (liveScene?.updateSnapshot && stage.querySelector("canvas")) {
       liveScene.updateSnapshot(snapshot);
       if (liveScene.applyCruiseEvent) {
-        const eventQueue = Array.isArray(window.__KEY_PILOT_CRUISE_EVENT_QUEUE__) ? window.__KEY_PILOT_CRUISE_EVENT_QUEUE__ : [];
+        const eventQueue = sceneBridge.getQueue("cruise");
         eventQueue.forEach((event) => liveScene.applyCruiseEvent(event));
-        window.__KEY_PILOT_CRUISE_EVENT_QUEUE__ = [];
-        if (!eventQueue.length && window.__KEY_PILOT_CRUISE_EVENT__) {
-          liveScene.applyCruiseEvent(window.__KEY_PILOT_CRUISE_EVENT__);
+        const latestEvent = sceneBridge.latest("cruise");
+        sceneBridge.clear("cruise");
+        if (!eventQueue.length && latestEvent) {
+          liveScene.applyCruiseEvent(latestEvent);
         }
       }
       return;
@@ -2412,7 +2127,11 @@ function syncPhaserScene() {
         this.tweens.killAll();
         if (isCruise && window.CruiseDefenseScene) return;
         if (isStrike) renderStrikePhaserWorld(this, nextSnapshot);
-        else renderHomePhaserWorld(this, nextSnapshot);
+        else this.add.text(width / 2, height / 2, "01 场景模块未加载", phaserTextStyle({
+          fontFamily: "PingFang SC, system-ui, sans-serif",
+          fontSize: "20px",
+          color: "#bdeeff"
+        })).setOrigin(0.5);
       };
       this.updateSnapshot(snapshot);
     }
@@ -2429,7 +2148,7 @@ function syncPhaserScene() {
     scale: {
       mode: PhaserEngine.Scale.NONE
     },
-    scene: useCruiseScene ? window.CruiseDefenseScene : useRoomCombatScene ? window.RoomCombatScene : SceneClass
+    scene: useCruiseScene ? window.CruiseDefenseScene : useRoomCombatScene ? window.RoomCombatScene : useHomeScene ? window.HomePreflightScene : SceneClass
   });
   window.__KEY_PILOT_PHASER__ = phaserGame;
 }
@@ -2480,261 +2199,6 @@ function sceneImageMarkup(sceneId, className = "") {
 function imageMarkup(src, className = "") {
   if (!src) return "";
   return `<img class="${className}" src="${src}" alt="" aria-hidden="true" decoding="async" />`;
-}
-
-function renderHomePhaserWorld(scene, snapshot) {
-  const { width, height } = snapshot;
-  scene.cameras.main.setBackgroundColor(snapshot.palette.bg);
-  drawHomeHangar(scene, snapshot);
-  drawPhaserWaveMarkers(scene, snapshot);
-  const robotX = snapshot.status === "prelock" ? width * 0.5 : width * 0.48;
-  const robotY = snapshot.status === "prelock" ? height * 0.58 : height * 0.52;
-  const robot = drawPhaserRobot(scene, robotX, robotY, snapshot);
-  const stations = drawHomeStationsPhaser(scene, snapshot);
-  drawHomeAnchorSystem(scene, snapshot, robotX, robotY, stations);
-  drawHomeResidualThreat(scene, snapshot);
-  runHomePhaserEvent(scene, snapshot, { robot, stations, robotX, robotY });
-  drawHomeTargetBeacon(scene, snapshot);
-}
-
-function drawHomeHangar(scene, snapshot) {
-  const { width, height, palette, corruption } = snapshot;
-  const hasApprovedBackground = scene.textures.exists(HOME_SCENE_BG_KEY);
-  if (hasApprovedBackground) {
-    const background = scene.add.image(width * 0.5, height * 0.5, HOME_SCENE_BG_KEY).setDepth(0);
-    const coverScale = Math.max(width / background.width, height / background.height);
-    background.setScale(coverScale).setAlpha(0.94);
-  }
-
-  const g = scene.add.graphics().setDepth(1);
-  if (!hasApprovedBackground) {
-    g.fillStyle(palette.wall, 1);
-    g.fillRect(0, 0, width, height);
-  } else {
-    g.fillStyle(0x02070c, 0.32);
-    g.fillRect(0, 0, width, height);
-  }
-  g.fillStyle(palette.fog, hasApprovedBackground ? 0.2 + corruption * 0.12 : 0.36 + corruption * 0.18);
-  g.fillEllipse(width * 0.5, height * 0.5, width * 0.72, height * 0.72);
-
-  g.fillStyle(0x020608, hasApprovedBackground ? 0.34 : 0.6);
-  g.fillRoundedRect(width * 0.34, height * 0.16, width * 0.32, height * 0.52, 8);
-  g.lineStyle(4, palette.accent, hasApprovedBackground ? snapshot.leftLocked && snapshot.rightLocked ? 0.34 : 0.14 : snapshot.leftLocked && snapshot.rightLocked ? 0.5 : 0.22);
-  g.strokeRoundedRect(width * 0.34, height * 0.16, width * 0.32, height * 0.52, 8);
-
-  const doorGap = snapshot.leftLocked && snapshot.rightLocked ? width * 0.06 : 0;
-  g.fillStyle(0x071820, hasApprovedBackground ? 0.3 : 0.92);
-  g.fillRoundedRect(width * 0.36 - doorGap, height * 0.18, width * 0.13, height * 0.48, 4);
-  g.fillRoundedRect(width * 0.51 + doorGap, height * 0.18, width * 0.13, height * 0.48, 4);
-  g.fillStyle(palette.accentSoft, hasApprovedBackground ? 0.08 : 0.13);
-  g.fillRoundedRect(width * 0.41 - doorGap, height * 0.23, width * 0.025, height * 0.36, 4);
-  g.fillRoundedRect(width * 0.57 + doorGap, height * 0.23, width * 0.025, height * 0.36, 4);
-
-  g.fillStyle(palette.danger, hasApprovedBackground ? 0.11 + corruption * 0.12 : 0.22 + corruption * 0.18);
-  g.fillRect(0, 0, width * 0.085, height);
-  g.lineStyle(3, palette.danger, hasApprovedBackground ? 0.26 + corruption * 0.18 : 0.5 + corruption * 0.24);
-  g.beginPath();
-  g.moveTo(width * 0.085, 0);
-  g.lineTo(width * 0.085, height);
-  g.strokePath();
-  scene.add.text(width * 0.042, height * 0.72, "旧位左墙", phaserTextStyle({
-    fontFamily: "SFMono-Regular, Menlo, Consolas, monospace",
-    fontSize: "15px",
-    color: "#ffaaa6"
-  })).setOrigin(0.5).setRotation(-Math.PI / 2).setDepth(5).setAlpha(hasApprovedBackground ? 0.34 : 0.72);
-
-  if (!hasApprovedBackground) drawPhaserFloor(scene, snapshot);
-  scene.add.text(width * 0.5, height * 0.14, snapshot.status === "prelock" ? "开舱锁定" : "中排神经底座", phaserTextStyle({
-    fontFamily: "PingFang SC, system-ui, sans-serif",
-    fontSize: "42px",
-    fontStyle: "900",
-    color: palette.label
-  })).setOrigin(0.5).setDepth(4).setAlpha(hasApprovedBackground ? 0.08 : 0.12);
-
-  const progress = snapshot.targetCount ? snapshot.completedTargets / snapshot.targetCount : 0;
-  g.fillStyle(palette.green, 0.16);
-  g.fillRoundedRect(width * 0.2, height * 0.87, width * 0.6, 10, 5);
-  g.fillStyle(palette.green, 0.72);
-  g.fillRoundedRect(width * 0.2, height * 0.87, width * 0.6 * progress, 10, 5);
-}
-
-function drawHomeStationsPhaser(scene, snapshot) {
-  const { width, height, palette } = snapshot;
-  const stations = {};
-  if (snapshot.status === "prelock") return stations;
-  const stationY = height * 0.74;
-  const leftStartX = width * 0.18;
-  const rightStartX = width * 0.55;
-  const handGap = width * 0.09;
-  HOME_KEYS.forEach((key, index) => {
-    const localIndex = index < 4 ? index : index - 4;
-    const x = (index < 4 ? leftStartX : rightStartX) + handGap * localIndex;
-    const y = stationY;
-    const charged = Boolean(snapshot.chargedKeys[key]);
-    const active = snapshot.currentTarget === key && snapshot.status !== "prelock";
-    const anchor = key === "f" || key === "j";
-    const displayKey = formatKey(key);
-    const boxW = anchor ? 58 : 48;
-    const boxH = anchor ? 54 : 46;
-    const depth = active ? 34 : 24;
-    const g = scene.add.graphics().setDepth(depth);
-    const fillColor = active ? palette.secondary : charged ? 0x17492f : anchor ? 0x11222b : 0x071014;
-    const fillAlpha = active ? 1 : charged ? 0.58 : anchor ? 0.32 : 0.68;
-    g.fillStyle(fillColor, fillAlpha);
-    g.fillRoundedRect(x - boxW / 2, y - boxH / 2, boxW, boxH, 5);
-    g.lineStyle(2, active ? 0xfff2a8 : charged ? palette.green : anchor ? palette.accentSoft : palette.accentSoft, active ? 1 : charged ? 0.42 : anchor ? 0.32 : 0.26);
-    g.strokeRoundedRect(x - boxW / 2, y - boxH / 2, boxW, boxH, 5);
-    scene.add.text(x, y - 2, displayKey, phaserTextStyle({
-      fontFamily: "SFMono-Regular, Menlo, Consolas, monospace",
-      fontSize: active ? "30px" : anchor ? "25px" : "20px",
-      fontStyle: "900",
-      color: active ? "#07100f" : charged ? "#a8ffd0" : anchor ? "#96c6d3" : "#a9d9e8"
-    })).setOrigin(0.5).setDepth(depth + 2).setAlpha(displayKey ? 1 : 0);
-    scene.add.text(x, y + boxH / 2 + 14, active ? "现在按" : charged ? "亮起" : anchor ? "主锚" : "底座", phaserTextStyle({
-      fontFamily: "PingFang SC, system-ui, sans-serif",
-      fontSize: "12px",
-      color: active ? "#fff1b8" : charged ? "#b8ffd5" : "#7fa4b0"
-    })).setOrigin(0.5).setDepth(depth + 1).setAlpha(active ? 0.86 : charged ? 0.58 : 0.42);
-    stations[key] = { x, y, active, charged, anchor };
-  });
-  return stations;
-}
-
-function drawHomeAnchorSystem(scene, snapshot, robotX, robotY, stations) {
-  const { width, height, palette } = snapshot;
-  const g = scene.add.graphics().setDepth(18);
-  const left = { x: width * 0.23, y: height * 0.32 };
-  const right = { x: width * 0.77, y: height * 0.32 };
-  const anchors = [
-    { ...left, key: "F", locked: snapshot.leftLocked, label: "左主锚" },
-    { ...right, key: "J", locked: snapshot.rightLocked, label: "右主锚" }
-  ];
-
-  anchors.forEach((anchor) => {
-    const key = anchor.key.toLowerCase();
-    const activeAnchor = snapshot.currentTarget === key;
-    const prelockMode = snapshot.status === "prelock";
-    const lineAlpha = prelockMode
-      ? anchor.locked ? 0.72 : 0.2
-      : activeAnchor ? 0.58 : 0.14;
-    g.lineStyle(4, anchor.locked ? palette.green : palette.accentSoft, lineAlpha);
-    g.beginPath();
-    g.moveTo(anchor.x, anchor.y);
-    g.lineTo(robotX, robotY - 40);
-    g.strokePath();
-    if (prelockMode) {
-      drawPhaserKeyPad(scene, anchor.x, anchor.y, key, "", anchor.locked || activeAnchor, snapshot, 28);
-    } else {
-      g.lineStyle(2, activeAnchor ? palette.secondary : palette.accentSoft, activeAnchor ? 0.42 : 0.18);
-      g.strokeRoundedRect(anchor.x - 28, anchor.y - 22, 56, 44, 5);
-      scene.add.text(anchor.x, anchor.y - 1, anchor.key, phaserTextStyle({
-        fontFamily: "SFMono-Regular, Menlo, Consolas, monospace",
-        fontSize: "20px",
-        fontStyle: "900",
-        color: activeAnchor ? "#ffe28a" : "#8fb5c0"
-      })).setOrigin(0.5).setDepth(29).setAlpha(activeAnchor ? 0.62 : 0.32);
-      scene.add.text(anchor.x, anchor.y + 32, "锚点在线", phaserTextStyle({
-        fontFamily: "PingFang SC, system-ui, sans-serif",
-        fontSize: "11px",
-        color: "#7fa4b0"
-      })).setOrigin(0.5).setDepth(29).setAlpha(activeAnchor ? 0.44 : 0.28);
-    }
-  });
-
-  if (snapshot.status === "playing" && stations[snapshot.currentTarget]) {
-    const station = stations[snapshot.currentTarget];
-    drawPhaserBeam(scene, { x: station.x, y: station.y }, { x: robotX, y: robotY + 10 }, palette.secondary, 0.42, 5, 19);
-  }
-}
-
-function drawHomeTargetBeacon(scene, snapshot) {
-  const target = formatKey(snapshot.currentTarget);
-  if (!target) return;
-  const { width, height, palette } = snapshot;
-  const x = width * 0.5;
-  const y = snapshot.status === "prelock" ? height * 0.22 : height * 0.2;
-  const caption = snapshot.status === "prelock"
-    ? target === "F" ? "按 F 锁定左手主锚" : "按 J 锁定右手主锚"
-    : `现在按 ${target}`;
-  const g = scene.add.graphics().setDepth(74);
-  g.fillStyle(0x02070c, 0.88);
-  g.fillRoundedRect(x - 132, y - 44, 264, 88, 9);
-  g.lineStyle(3, palette.secondary, 0.92);
-  g.strokeRoundedRect(x - 132, y - 44, 264, 88, 9);
-  g.fillStyle(0xffd66e, 1);
-  g.fillRoundedRect(x - 34, y - 34, 68, 68, 8);
-  g.lineStyle(2, 0xfff3bd, 1);
-  g.strokeRoundedRect(x - 34, y - 34, 68, 68, 8);
-  scene.add.text(x, y - 1, target, phaserTextStyle({
-    fontFamily: "SFMono-Regular, Menlo, Consolas, monospace",
-    fontSize: "42px",
-    fontStyle: "900",
-    color: "#07100f"
-  })).setOrigin(0.5).setDepth(76);
-  scene.add.text(x, y + 56, caption, phaserTextStyle({
-    fontFamily: "PingFang SC, system-ui, sans-serif",
-    fontSize: "15px",
-    fontStyle: "800",
-    color: "#fff2bc"
-  })).setOrigin(0.5).setDepth(76);
-}
-
-function drawHomeResidualThreat(scene, snapshot) {
-  const { width, height, palette, corruption } = snapshot;
-  const g = scene.add.graphics().setDepth(12);
-  const alpha = 0.18 + corruption * 0.32;
-  g.fillStyle(palette.danger, alpha);
-  g.fillEllipse(width * 0.11, height * 0.5, 118 + corruption * 80, 160 + corruption * 80);
-  g.lineStyle(3, palette.danger, 0.3 + corruption * 0.36);
-  g.strokeEllipse(width * 0.11, height * 0.5, 128 + corruption * 90, 170 + corruption * 90);
-  g.fillStyle(0xffd66e, 0.7);
-  g.fillRect(width * 0.085, height * 0.47, 12, 14);
-  g.fillRect(width * 0.125, height * 0.47, 12, 14);
-  scene.add.text(width * 0.12, height * 0.62, "偏左残影", phaserTextStyle({
-    fontFamily: "PingFang SC, system-ui, sans-serif",
-    fontSize: "14px",
-    fontStyle: "800",
-    color: "#ffd3d1",
-    backgroundColor: "rgba(35,6,8,0.58)",
-    padding: { x: 7, y: 3 }
-  })).setOrigin(0.5).setDepth(13).setAlpha(0.76);
-}
-
-function runHomePhaserEvent(scene, snapshot, refs) {
-  const { width, height, event, palette, reducedMotion } = snapshot;
-  const activeStation = refs.stations[snapshot.currentTarget];
-  if (event === "boot") {
-    const x = snapshot.currentTarget === "j" ? width * 0.77 : width * 0.23;
-    const y = height * 0.32;
-    drawPhaserPulse(scene, x, y, palette.green, 0.72, 46, 92, reducedMotion);
-  }
-  if (event === "launch") {
-    const gate = scene.add.rectangle(width * 0.5, height * 0.42, width * 0.32, height * 0.52, palette.green, 0.12).setDepth(45);
-    if (!reducedMotion) {
-      scene.tweens.add({ targets: gate, alpha: 0, scaleX: 1.18, scaleY: 1.12, duration: 420, ease: "Cubic.easeOut" });
-    }
-  }
-  if ((event === "charge" || event === "hit") && activeStation) {
-    drawPhaserPulse(scene, activeStation.x, activeStation.y, palette.secondary, 0.82, 38, 86, reducedMotion);
-  }
-  if (event === "crash" || event === "drift") {
-    const flash = scene.add.rectangle(width * 0.07, height * 0.5, width * 0.16, height, palette.danger, event === "drift" ? 0.34 : 0.22).setDepth(50);
-    drawPhaserPulse(scene, width * 0.1, height * 0.5, palette.danger, 0.72, 70, 180, reducedMotion);
-    if (!reducedMotion) {
-      scene.cameras.main.shake(event === "drift" ? 260 : 180, event === "drift" ? 0.016 : 0.009);
-      scene.tweens.add({ targets: flash, alpha: 0, duration: 320, ease: "Cubic.easeOut" });
-      scene.tweens.add({ targets: refs.robot, x: refs.robotX - 32, duration: 120, yoyo: true, ease: "Cubic.easeOut" });
-    }
-  }
-}
-
-function drawPhaserPulse(scene, x, y, color, alpha, startRadius, endRadius, reducedMotion) {
-  const pulse = scene.add.circle(x, y, startRadius, color, 0).setStrokeStyle(5, color, alpha).setDepth(60);
-  if (!reducedMotion) {
-    scene.tweens.add({ targets: pulse, radius: endRadius, alpha: 0, duration: 360, ease: "Cubic.easeOut" });
-  } else {
-    pulse.setAlpha(0.2);
-  }
 }
 
 function getStrikeSceneSnapshot(width, height, pixelRatio = 1) {
@@ -4686,6 +4150,7 @@ function getDebugState() {
     resultReason: state?.result?.reason || "",
     deferredFinishPending: finishLifecycle.pending(),
     audio: audioDirector.getDebugState(),
+    random: randomSource.getDebugState(),
     currentPattern: state ? getCurrentPattern(state) : [],
     cruiseQueue: (state?.cruiseQueue || []).map((threat) => ({
       key: threat.key,

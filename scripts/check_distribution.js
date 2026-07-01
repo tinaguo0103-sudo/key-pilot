@@ -54,6 +54,10 @@ if (fs.existsSync(path.join(root, "key-pilot-mvp-local.zip"))) {
   fail("key-pilot-mvp-local.zip should stay removed; desktop app plus single-file HTML are the supported local options");
 }
 
+if (fs.existsSync(path.join(root, "dist", "Key-Pilot-portable-mac-arm64.zip"))) {
+  fail("dist/Key-Pilot-portable-mac-arm64.zip is a stale raw package; use Key-Pilot-internal-mac-arm64.zip instead");
+}
+
 const readme = fs.existsSync(path.join(root, "README.md")) ? readText("README.md") : "";
 if (readme.includes("key-pilot-mvp-local.zip")) {
   fail("README.md still documents the deprecated zip package");

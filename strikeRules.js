@@ -14,6 +14,7 @@
     const roomChain = options.roomChain || [];
     const shuffle = options.shuffle;
     const pick = options.pick;
+    const random = options.random || Math.random;
     const makeShuffledRun = options.makeShuffledRun;
     const makeBalancedSideOrder = options.makeBalancedSideOrder;
     const getFingerGuideForKey = options.getFingerGuideForKey;
@@ -191,9 +192,9 @@
         return roomConfig.patterns.map((pattern, roomLocalIndex) => {
           const basePattern = balancedPatterns[patternIndex] || pattern;
           patternIndex += 1;
-          const modifierOffset = Math.floor(Math.random() * roomConfig.modifiers.length);
-          const laneOffset = Math.floor(Math.random() * roomConfig.lanes.length);
-          const spawnOffset = Math.floor(Math.random() * roomConfig.spawnSides.length);
+          const modifierOffset = Math.floor(random() * roomConfig.modifiers.length);
+          const laneOffset = Math.floor(random() * roomConfig.lanes.length);
+          const spawnOffset = Math.floor(random() * roomConfig.spawnSides.length);
           const modifier = getStrikeModifierById(roomConfig.modifiers[(roomLocalIndex + modifierOffset) % roomConfig.modifiers.length] || roomConfig.modifiers[0]);
           const combatPattern = makeCombatPattern(basePattern, roomConfig, roomLocalIndex, modifier);
           const bossPhase = roomConfig.mechanic === "boss" ? roomLocalIndex + 1 : 0;
@@ -230,10 +231,10 @@
         const monsters = monsterVariants[wave.name] || [wave.monster || level.monster];
         const shuffledModifiers = shuffle(modifiers);
         return patterns.map((pattern, index) => {
-          const monster = monsters[(index + Math.floor(Math.random() * monsters.length)) % monsters.length];
+          const monster = monsters[(index + Math.floor(random() * monsters.length)) % monsters.length];
           const modifier = shuffledModifiers[(index + waveIndex) % shuffledModifiers.length];
           const combatPattern = makeCombatPattern(pattern, wave, index, modifier);
-          const lane = ["low", "mid", "high"][(index + waveIndex + Math.floor(Math.random() * 3)) % 3];
+          const lane = ["low", "mid", "high"][(index + waveIndex + Math.floor(random() * 3)) % 3];
           return {
             pattern: combatPattern,
             basePattern: pattern,

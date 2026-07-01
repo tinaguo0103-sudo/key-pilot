@@ -48,10 +48,15 @@ const runtimeLifecycle = read("runtimeLifecycle.js");
 const debugBridge = read("debugBridge.js");
 const progressStore = read("progressStore.js");
 const audioDirector = read("audioDirector.js");
+const randomSource = read("randomSource.js");
+const sceneBridge = read("sceneBridge.js");
+const a11ySupport = read("a11ySupport.js");
+const gameConfig = read("gameConfig.js");
 const homeRules = read("homeRules.js");
 const cruiseRules = read("cruiseRules.js");
 const strikeRules = read("strikeRules.js");
 const sceneSnapshots = read("sceneSnapshots.js");
+const homeScene = read("homePreflightScene.js");
 const roomScene = read("roomCombatScene.js");
 const cruiseScene = read("cruiseDefenseScene.js");
 const app = read("app.js");
@@ -87,6 +92,18 @@ ${progressStore}
 ${audioDirector}
     </script>
     <script>
+${randomSource}
+    </script>
+    <script>
+${sceneBridge}
+    </script>
+    <script>
+${a11ySupport}
+    </script>
+    <script>
+${gameConfig}
+    </script>
+    <script>
 ${homeRules}
     </script>
     <script>
@@ -97,6 +114,9 @@ ${strikeRules}
     </script>
     <script>
 ${sceneSnapshots}
+    </script>
+    <script>
+${homeScene}
     </script>
     <script>
 ${roomScene}

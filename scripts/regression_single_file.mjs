@@ -243,11 +243,20 @@ async function debugState(page) {
   return evaluate(page, `window.__KEY_PILOT_DEBUG_STATE__ ? window.__KEY_PILOT_DEBUG_STATE__() : null`);
 }
 
+async function homeSceneDebug(page) {
+  return evaluate(page, `(() => {
+    const scene = window.__KEY_PILOT_PHASER__?.scene?.scenes?.[0];
+    return scene?.getDebugState?.() || null;
+  })()`);
+}
+
 async function runHomeRegression(page) {
   await click(page, '[data-start-level="level-01-home"]');
   await waitForEval(page, `window.__KEY_PILOT_DEBUG_STATE__?.().status === "prelock"`, 8000, "01 prelock");
   let debug = await debugState(page);
   assert(debug.currentTarget === "f", `01 should start on F, got ${debug.currentTarget}`);
+  assert(await evaluate(page, `document.querySelector("#app")?.getAttribute("role") === "application"`), "app should expose an application role for assistive tech");
+  assert(await evaluate(page, `Boolean(document.querySelector("#key-pilot-live-region"))`), "app should keep a polite live region mounted");
 
   await press(page, "f");
   await waitForEval(page, `window.__KEY_PILOT_DEBUG_STATE__?.().currentTarget === "j"`, 4000, "01 switches to J after F");
@@ -258,6 +267,10 @@ async function runHomeRegression(page) {
   await waitForEval(page, `window.__KEY_PILOT_DEBUG_STATE__?.().status === "playing"`, 6000, "01 playing");
   assert(await evaluate(page, `!document.querySelector(".prelock-focus-command")`), "01 prelock focus command should disappear after F/J lock");
   assert(await evaluate(page, `document.querySelectorAll("#home-phaser-stage canvas").length === 1`), "01 should keep exactly one home Phaser canvas");
+  let homeDebug = await homeSceneDebug(page);
+  assert(homeDebug?.mode === "home", `01 should run through HomePreflightScene, got ${homeDebug?.mode || "missing"}`);
+  assert(homeDebug.canvasCount === 1, `01 HomePreflightScene should own exactly one canvas, got ${homeDebug.canvasCount}`);
+  assert(homeDebug.childCount > 8, `01 HomePreflightScene should render a populated world, got ${homeDebug.childCount} display objects`);
 
   for (let index = 0; index < 12; index += 1) {
     debug = await debugState(page);
@@ -267,6 +280,8 @@ async function runHomeRegression(page) {
     await waitForEval(page, `window.__KEY_PILOT_DEBUG_STATE__?.().completedActions > ${before} || window.__KEY_PILOT_DEBUG_STATE__?.().completedTargets > ${before}`, 5000, `01 input ${index + 1}`);
     const commandText = await evaluate(page, `document.querySelector(".scene-command strong")?.textContent.trim() || ""`);
     assert(commandText.length >= 1, `01 scene command key disappeared after input ${index + 1}`);
+    homeDebug = await homeSceneDebug(page);
+    assert(homeDebug?.currentTarget, `01 Phaser target disappeared after input ${index + 1}`);
     assert(await evaluate(page, `!document.querySelector(".app-shell.audio-beat")`), "01 should not leave audio-beat flash class on the shell");
     assert(await evaluate(page, `document.querySelectorAll("#home-phaser-stage canvas").length === 1`), "01 should not duplicate home canvas");
   }
@@ -506,6 +521,8 @@ async function main() {
 
     assert(await evaluate(page, `document.scrollingElement.scrollHeight <= window.innerHeight + 2`), "single-file page should not have a vertical scrollbar at first load");
     assert(await evaluate(page, `document.querySelectorAll("canvas").length === 0`), "menu should not create gameplay canvas before a level starts");
+    assert(await evaluate(page, `document.querySelector("#app")?.getAttribute("role") === "application"`), "menu should expose app role");
+    assert(await evaluate(page, `Boolean(document.querySelector("#key-pilot-live-region"))`), "menu should mount accessibility live region");
 
     await runHomeRegression(page);
     await runStrikeRegression(page);
