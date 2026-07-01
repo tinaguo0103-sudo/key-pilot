@@ -47,8 +47,11 @@ const manifest = inlineManifestAssets(read("assetManifest.js"));
 const runtimeLifecycle = read("runtimeLifecycle.js");
 const debugBridge = read("debugBridge.js");
 const progressStore = read("progressStore.js");
+const audioDirector = read("audioDirector.js");
+const homeRules = read("homeRules.js");
 const cruiseRules = read("cruiseRules.js");
 const strikeRules = read("strikeRules.js");
+const sceneSnapshots = read("sceneSnapshots.js");
 const roomScene = read("roomCombatScene.js");
 const cruiseScene = read("cruiseDefenseScene.js");
 const app = read("app.js");
@@ -81,10 +84,19 @@ ${debugBridge}
 ${progressStore}
     </script>
     <script>
+${audioDirector}
+    </script>
+    <script>
+${homeRules}
+    </script>
+    <script>
 ${cruiseRules}
     </script>
     <script>
 ${strikeRules}
+    </script>
+    <script>
+${sceneSnapshots}
     </script>
     <script>
 ${roomScene}

@@ -332,35 +332,16 @@ let timerId = null;
 let pressedKey = "";
 let flashType = "";
 let shellShake = false;
-let audioContext = null;
-let soundEnabled = true;
-let musicEnabled = true;
-let audioVolumeMode = "standard";
-let audioDirector = null;
-let musicPulseTimer = null;
-let audioBeatTimer = null;
 let sceneCanvasRaf = null;
 let sceneEffects = [];
 let phaserGame = null;
 let roomCombatEventId = 0;
 let cruiseCombatEventId = 0;
-let desktopAudioBooted = false;
 const finishLifecycle = window.KeyPilotRuntimeLifecycle.createDeferredFinishController({
   getState: () => state,
   getView: () => view,
   finishGame: (reason) => finishGame(reason)
 });
-
-try {
-  const audioPrefs = JSON.parse(localStorage.getItem(AUDIO_PREFS_KEY) || "{}");
-  if (typeof audioPrefs.sfx === "boolean") soundEnabled = audioPrefs.sfx;
-  if (typeof audioPrefs.bgm === "boolean") musicEnabled = audioPrefs.bgm;
-  if (["soft", "standard", "strong"].includes(audioPrefs.volume)) audioVolumeMode = audioPrefs.volume;
-} catch {
-  soundEnabled = true;
-  musicEnabled = true;
-  audioVolumeMode = "standard";
-}
 
 function makeInitialState(level) {
   const homeQueue = level.mode === "home" ? makeHomeQueue(level) : [];
@@ -481,6 +462,10 @@ const cruiseRules = window.KeyPilotCruiseRules.createCruiseRules({
   fingerWeights: CRUISE_FINGER_WEIGHTS,
   makeBalancedSideOrder
 });
+const homeRules = window.KeyPilotHomeRules.createHomeRules({
+  homeKeys: HOME_KEYS,
+  makeShuffledRun
+});
 const strikeRules = window.KeyPilotStrikeRules.createStrikeRules({
   fingerGroups: FINGER_GROUPS,
   fingerGuideById: FINGER_GUIDE_BY_ID,
@@ -497,6 +482,35 @@ const strikeRules = window.KeyPilotStrikeRules.createStrikeRules({
   getFingerGuideForKey,
   getPatternForAction,
   getWaveProgress
+});
+const audioDirector = window.KeyPilotAudioDirector.createAudioDirector({
+  storage: localStorage,
+  prefsKey: AUDIO_PREFS_KEY,
+  isDesktopRuntime: IS_DESKTOP_RUNTIME,
+  clamp,
+  getView: () => view,
+  getState: () => state,
+  getCurrentCruiseThreat,
+  getCruiseThreatTimeRatio,
+  isLowHullState
+});
+const sceneSnapshots = window.KeyPilotSceneSnapshots.createSceneSnapshots({
+  clamp,
+  getState: () => state,
+  getWaveProgress,
+  getStrikeEncounter,
+  getCurrentPattern,
+  getStrikeRoomTheme,
+  getCurrentFingerGuide,
+  getCurrentCruiseThreat,
+  getCruiseThreatTimeRatio,
+  getCruiseThreatProgress,
+  getCruiseIntroRemaining,
+  getCruiseRoundInfo,
+  getCruiseRoundThreats,
+  isCruiseIntroActive,
+  fingerGuideById: FINGER_GUIDE_BY_ID,
+  strikeRoomThemes: STRIKE_ROOM_THEMES
 });
 
 function getResults() {
@@ -591,13 +605,7 @@ function makeShuffledRun(items, count, keyForItem = (item) => String(item), prev
 }
 
 function makeHomeQueue(level) {
-  if (level.mode !== "home") return [];
-  let previousKey = "";
-  return level.segments.flatMap((segment) => {
-    const segmentQueue = makeShuffledRun(segment, segment.length, (key) => key, previousKey);
-    previousKey = segmentQueue[segmentQueue.length - 1] || previousKey;
-    return segmentQueue;
-  });
+  return homeRules.makeHomeQueue(level);
 }
 
 function getKeyRowIndex(key) {
@@ -829,612 +837,28 @@ function combatEventForSceneEvent(fallback = "wrong-key") {
   return fallback;
 }
 
-function saveAudioPrefs() {
-  localStorage.setItem(AUDIO_PREFS_KEY, JSON.stringify({
-    sfx: soundEnabled,
-    bgm: musicEnabled,
-    volume: audioVolumeMode
-  }));
-}
-
-function ensureAudio() {
-  try {
-    const AudioEngine = window.AudioContext || window.webkitAudioContext;
-    if (!AudioEngine) return null;
-    if (!audioContext) audioContext = new AudioEngine();
-    if (audioContext.state === "suspended") audioContext.resume();
-    return audioContext;
-  } catch {
-    return null;
-  }
-}
-
-const AUDIO_VOLUME_PROFILES = {
-  soft: { label: "轻", master: 0.82, bgm: 0.82, ambient: 0.44, sfx: 0.58, alert: 0.62 },
-  standard: { label: "标准", master: 0.96, bgm: 1.08, ambient: 0.52, sfx: 0.78, alert: 0.78 },
-  strong: { label: "强", master: 1, bgm: 1.28, ambient: 0.58, sfx: 0.92, alert: 0.9 }
-};
-
-const SOUND_ALIASES = {
-  correct: "baseLock",
-  clear: "monsterClear",
-  drift: "driftError",
-  wrong: "wrongKey",
-  low: "lowHealth",
-  door: "doorSoft",
-  report: "reportOpen",
-  base_lock: "baseLock",
-  arm_strike: "armStrike",
-  arm_return: "armReturn",
-  monster_hit: "monsterHit",
-  monster_clear: "monsterClear",
-  wrong_key: "wrongKey",
-  drift_error: "driftError",
-  low_health: "lowHealth",
-  report_open: "reportOpen",
-  door_soft: "doorSoft",
-  projectile_spawn: "projectileSpawn",
-  projectile_close: "projectileClose",
-  shield_block: "shieldBlock",
-  counter_fire: "counterFire",
-  timeout_hit: "timeoutHit",
-  wave_clear: "waveClear"
-};
-
-const ALERT_SOUNDS = new Set(["driftError", "wrongKey", "lowHealth", "breach", "death", "timeoutHit", "projectileClose"]);
-const audioBuffers = new Map();
-const audioBufferPromises = new Map();
-const bgmBuffers = new Map();
-const bgmBufferPromises = new Map();
-const bgmLoadFailures = new Set();
-
 function getVolumeProfile() {
-  return AUDIO_VOLUME_PROFILES[audioVolumeMode] || AUDIO_VOLUME_PROFILES.standard;
-}
-
-function getSfxManifest(id) {
-  return window.KeyPilotAssets?.audio?.sfx?.[id] || null;
-}
-
-function getBgmManifest(id) {
-  return window.KeyPilotAssets?.audio?.bgm?.[id] || null;
-}
-
-function loadAudioBuffer(id) {
-  const manifest = getSfxManifest(id);
-  if (!manifest?.src) return null;
-  if (audioBuffers.has(id)) return Promise.resolve(audioBuffers.get(id));
-  if (audioBufferPromises.has(id)) return audioBufferPromises.get(id);
-  const ctx = ensureAudio();
-  if (!ctx) return null;
-  const promise = fetch(manifest.src)
-    .then((response) => {
-      if (!response.ok) throw new Error(`Audio load failed: ${manifest.src}`);
-      return response.arrayBuffer();
-    })
-    .then((buffer) => ctx.decodeAudioData(buffer.slice(0)))
-    .then((decoded) => {
-      audioBuffers.set(id, decoded);
-      return decoded;
-    })
-    .catch(() => null);
-  audioBufferPromises.set(id, promise);
-  return promise;
-}
-
-function loadBgmBuffer(id) {
-  const manifest = getBgmManifest(id);
-  if (!manifest?.src || bgmLoadFailures.has(id)) return null;
-  if (bgmBuffers.has(id)) return Promise.resolve(bgmBuffers.get(id));
-  if (bgmBufferPromises.has(id)) return bgmBufferPromises.get(id);
-  const ctx = ensureAudio();
-  if (!ctx) return null;
-  const promise = fetch(manifest.src)
-    .then((response) => {
-      if (!response.ok) throw new Error(`BGM load failed: ${manifest.src}`);
-      return response.arrayBuffer();
-    })
-    .then((buffer) => ctx.decodeAudioData(buffer.slice(0)))
-    .then((decoded) => {
-      bgmBuffers.set(id, decoded);
-      return decoded;
-    })
-    .catch(() => {
-      bgmLoadFailures.add(id);
-      return null;
-    });
-  bgmBufferPromises.set(id, promise);
-  return promise;
-}
-
-function preloadAudioAssets() {
-  Object.keys(window.KeyPilotAssets?.audio?.sfx || {}).forEach((id) => loadAudioBuffer(id));
-  Object.keys(window.KeyPilotAssets?.audio?.bgm || {}).forEach((id) => loadBgmBuffer(id));
-}
-
-function stopBgmLoop(director, fade = 0.28) {
-  if (!director?.bgmSource) return;
-  const now = director.ctx.currentTime;
-  try {
-    director.bgmSourceGain?.gain.cancelScheduledValues(now);
-    director.bgmSourceGain?.gain.setValueAtTime(director.bgmSourceGain.gain.value || 0.0001, now);
-    director.bgmSourceGain?.gain.linearRampToValueAtTime(0.0001, now + fade);
-    director.bgmSource.stop(now + fade + 0.03);
-  } catch {
-    // Source may already be stopped by the browser; the next loop will replace it.
-  }
-  director.bgmSource = null;
-  director.bgmSourceGain = null;
-  director.currentBgmId = "";
-  director.usingAssetBgm = false;
-}
-
-function startBgmLoop(director, id) {
-  const buffer = bgmBuffers.get(id);
-  if (!director || !buffer) return false;
-  if (director.currentBgmId === id && director.bgmSource) return true;
-  stopBgmLoop(director, 0.18);
-  const now = director.ctx.currentTime;
-  const source = director.ctx.createBufferSource();
-  const sourceGain = director.ctx.createGain();
-  source.buffer = buffer;
-  source.loop = true;
-  sourceGain.gain.setValueAtTime(0.0001, now);
-  sourceGain.gain.linearRampToValueAtTime(1, now + 0.32);
-  source.connect(sourceGain).connect(director.bgmGain);
-  source.start(now);
-  director.bgmSource = source;
-  director.bgmSourceGain = sourceGain;
-  director.currentBgmId = id;
-  director.usingAssetBgm = true;
-  return true;
-}
-
-function syncBgmLoop(profile, director) {
-  const bgmId = profile.bgmId;
-  if (!musicEnabled || !bgmId) {
-    stopBgmLoop(director);
-    return false;
-  }
-  if (startBgmLoop(director, bgmId)) return true;
-  const promise = loadBgmBuffer(bgmId);
-  if (!promise || bgmLoadFailures.has(bgmId)) {
-    stopBgmLoop(director);
-    return false;
-  }
-  promise.then((buffer) => {
-    if (buffer && audioDirector === director && musicEnabled && getAudioProfile().bgmId === bgmId) {
-      startBgmLoop(director, bgmId);
-    }
-  });
-  stopBgmLoop(director, 0.18);
-  director.currentBgmId = bgmId;
-  director.usingAssetBgm = false;
-  return true;
-}
-
-function getAudioChannel(channel = "sfx") {
-  const director = audioDirector || ensureAudioDirector(true);
-  if (!director) return null;
-  if (channel === "alert") return director.alertGain;
-  if (channel === "bgm") return director.bgmGain;
-  if (channel === "ambient") return director.ambientGain;
-  return director.sfxGain;
-}
-
-function tone(frequency, duration = 0.08, type = "square", gain = 0.035, delay = 0, channel = "sfx") {
-  if (channel !== "bgm" && channel !== "ambient" && !soundEnabled) return;
-  const ctx = ensureAudio();
-  if (!ctx) return;
-  const now = ctx.currentTime + delay;
-  const oscillator = ctx.createOscillator();
-  const volume = ctx.createGain();
-  const output = getAudioChannel(channel) || ctx.destination;
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, now);
-  volume.gain.setValueAtTime(0.0001, now);
-  volume.gain.exponentialRampToValueAtTime(gain, now + 0.012);
-  volume.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  oscillator.connect(volume).connect(output);
-  oscillator.start(now);
-  oscillator.stop(now + duration + 0.02);
-}
-
-function playBufferSound(id, options = {}) {
-  if (!soundEnabled) return false;
-  const ctx = ensureAudio();
-  const buffer = audioBuffers.get(id);
-  if (!ctx || !buffer) {
-    loadAudioBuffer(id);
-    return false;
-  }
-  const channel = options.channel || (ALERT_SOUNDS.has(id) ? "alert" : "sfx");
-  const output = getAudioChannel(channel) || ctx.destination;
-  const source = ctx.createBufferSource();
-  const volume = ctx.createGain();
-  const now = ctx.currentTime + (options.delay || 0);
-  source.buffer = buffer;
-  volume.gain.setValueAtTime(options.gain ?? 0.72, now);
-  source.connect(volume).connect(output);
-  source.start(now);
-  return true;
-}
-
-function playFallbackSound(kind, options = {}) {
-  kind = {
-    base_lock: "correct",
-    arm_strike: "door",
-    arm_return: "correct",
-    monster_hit: "wrong",
-    monster_clear: "clear",
-    wrong_key: "wrong",
-    drift_error: "drift",
-    low_health: "low",
-    report_open: "report",
-    door_soft: "door"
-  }[kind] || kind;
-  const delay = options.delay || 0;
-  if (kind === "correct") {
-    tone(520, 0.07, "triangle", 0.018, delay);
-    tone(780, 0.08, "triangle", 0.014, delay + 0.045);
-  } else if (kind === "clear") {
-    tone(420, 0.08, "square", 0.018, delay);
-    tone(840, 0.12, "triangle", 0.024, delay + 0.06);
-    tone(1260, 0.1, "sine", 0.014, delay + 0.13);
-  } else if (kind === "drift") {
-    tone(96, 0.14, "sawtooth", 0.032, delay, "alert");
-    tone(72, 0.18, "sawtooth", 0.022, delay + 0.045, "alert");
-  } else if (kind === "wrong") {
-    tone(150, 0.1, "sawtooth", 0.026, delay, "alert");
-    tone(110, 0.08, "square", 0.018, delay + 0.05, "alert");
-  } else if (kind === "breach") {
-    tone(86, 0.18, "sawtooth", 0.034, delay, "alert");
-    tone(52, 0.22, "square", 0.022, delay + 0.06, "alert");
-    tone(720, 0.05, "square", 0.02, delay + 0.02, "alert");
-  } else if (kind === "low") {
-    tone(260, 0.07, "square", 0.026, delay, "alert");
-    tone(260, 0.07, "square", 0.026, delay + 0.18, "alert");
-  } else if (kind === "death") {
-    tone(72, 0.28, "sawtooth", 0.034, delay, "alert");
-    tone(42, 0.36, "square", 0.026, delay + 0.08, "alert");
-  } else if (kind === "door") {
-    tone(86, 0.16, "triangle", 0.018, delay);
-    tone(118, 0.12, "sine", 0.012, delay + 0.08);
-  } else if (kind === "report") {
-    tone(392, 0.1, "triangle", 0.018, delay);
-    tone(587, 0.12, "sine", 0.014, delay + 0.08);
-    tone(784, 0.14, "triangle", 0.012, delay + 0.16);
-  }
+  return audioDirector.getVolumeProfile();
 }
 
 function playSound(kind, options = {}) {
-  const id = SOUND_ALIASES[kind] || kind;
-  if (playBufferSound(id, options)) return;
-  playFallbackSound(kind, options);
-}
-
-function makeNoiseBuffer(ctx, seconds = 2) {
-  const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
-  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  let last = 0;
-  for (let index = 0; index < length; index += 1) {
-    last = (last + (Math.random() * 2 - 1) * 0.08) * 0.98;
-    data[index] = clamp(last, -1, 1);
-  }
-  return buffer;
-}
-
-function musicTone(frequency, duration = 0.12, type = "triangle", gain = 0.012, delay = 0) {
-  if (!musicEnabled) return;
-  const director = ensureAudioDirector(true);
-  if (!director) return;
-  const ctx = director.ctx;
-  const now = ctx.currentTime + delay;
-  const oscillator = ctx.createOscillator();
-  const volume = ctx.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, now);
-  volume.gain.setValueAtTime(0.0001, now);
-  volume.gain.exponentialRampToValueAtTime(gain, now + 0.018);
-  volume.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  oscillator.connect(volume).connect(director.bgmGain);
-  oscillator.start(now);
-  oscillator.stop(now + duration + 0.03);
-}
-
-function musicSemitone(root, steps) {
-  return root * Math.pow(2, steps / 12);
-}
-
-function musicChord(root, intervals, duration, gain, delay = 0, type = "triangle") {
-  intervals.forEach((step, index) => {
-    musicTone(musicSemitone(root, step), duration, type, gain * (index === 0 ? 0.72 : 0.42), delay + index * 0.018);
-  });
-}
-
-function ensureAudioDirector(forceStart = false) {
-  if (audioDirector) return audioDirector;
-  if (!musicEnabled && !forceStart) return null;
-  const ctx = ensureAudio();
-  if (!ctx) return null;
-  if (ctx.state === "suspended") ctx.resume?.();
-
-  const master = ctx.createGain();
-  const bgmGain = ctx.createGain();
-  const bedGain = ctx.createGain();
-  const ambientGain = ctx.createGain();
-  const sfxGain = ctx.createGain();
-  const alertGain = ctx.createGain();
-  const bgmFilter = ctx.createBiquadFilter();
-  const ambientFilter = ctx.createBiquadFilter();
-  const drone = ctx.createOscillator();
-  const sub = ctx.createOscillator();
-  const noise = ctx.createBufferSource();
-
-  master.gain.setValueAtTime(0.72, ctx.currentTime);
-  bgmGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  bedGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  ambientGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  sfxGain.gain.setValueAtTime(0.62, ctx.currentTime);
-  alertGain.gain.setValueAtTime(0.62, ctx.currentTime);
-  bgmFilter.type = "lowpass";
-  bgmFilter.frequency.setValueAtTime(520, ctx.currentTime);
-  bgmFilter.Q.setValueAtTime(0.8, ctx.currentTime);
-  ambientFilter.type = "lowpass";
-  ambientFilter.frequency.setValueAtTime(680, ctx.currentTime);
-  ambientFilter.Q.setValueAtTime(0.45, ctx.currentTime);
-
-  drone.type = "triangle";
-  drone.frequency.setValueAtTime(146.83, ctx.currentTime);
-  sub.type = "sine";
-  sub.frequency.setValueAtTime(73.42, ctx.currentTime);
-  noise.buffer = makeNoiseBuffer(ctx, 2.4);
-  noise.loop = true;
-
-  drone.connect(bedGain);
-  sub.connect(bedGain);
-  bedGain.connect(bgmFilter);
-  bgmFilter.connect(bgmGain).connect(master);
-  noise.connect(ambientFilter).connect(ambientGain).connect(master);
-  sfxGain.connect(master);
-  alertGain.connect(master);
-  master.connect(ctx.destination);
-
-  drone.start();
-  sub.start();
-  noise.start();
-  preloadAudioAssets();
-
-  audioDirector = {
-    ctx,
-    master,
-    drone,
-    sub,
-    bgmGain,
-    bedGain,
-    ambientGain,
-    sfxGain,
-    alertGain,
-    bgmFilter,
-    ambientFilter,
-    mode: "",
-    currentBgmId: "",
-    bgmSource: null,
-    bgmSourceGain: null,
-    usingAssetBgm: false,
-    tempo: 0,
-    beat: 0
-  };
-  return audioDirector;
-}
-
-function getAudioProfile() {
-  const muted = { mode: "muted", bgmId: "", bgm: 0, bed: 0, ambient: 0, filter: 300, ambientFilter: 420, tempo: 0, root: 146.83, scale: "menu" };
-  if (!musicEnabled) return muted;
-
-  if (view === "playing" && state) {
-    if (state.status === "dead") {
-      return { mode: "shutdown", bgmId: "report", bgm: 0.24, bed: 0.0001, ambient: 0.004, filter: 720, ambientFilter: 340, tempo: 0, root: 98, scale: "shutdown" };
-    }
-    if (state.level.mode === "strike" && state.status === "playing") {
-      const danger = clamp((state.monsterPressure + state.corruption) / 200, 0, 1);
-      const low = isLowHullState(state);
-      return {
-        mode: low ? "critical-combat" : "combat",
-        bgmId: "combat",
-        bgm: 0.58 + danger * 0.12,
-        bed: 0.0001 + danger * 0.0001,
-        ambient: 0.004 + danger * 0.004,
-        filter: low ? 1420 : 1180 + danger * 280,
-        ambientFilter: low ? 820 : 520 + danger * 180,
-        tempo: low ? 390 : 520,
-        root: low ? 130.81 : 110,
-        noteGain: low ? 0.34 : 0.3,
-        scale: low ? "critical" : "combat"
-      };
-    }
-    if (state.level.mode === "strike" && state.status === "finger-calibration") {
-      return { mode: "calibration", bgmId: "calibration", bgm: 0.5, bed: 0.0001, ambient: 0.003, filter: 1180, ambientFilter: 480, tempo: 640, root: 146.83, noteGain: 0.28, scale: "calibration" };
-    }
-    if (state.level.mode === "cruise" && state.status === "playing") {
-      const threat = getCurrentCruiseThreat(state);
-      const timeRatio = getCruiseThreatTimeRatio(state);
-      const danger = clamp((1 - timeRatio) * 0.7 + state.corruption / 240 + state.cruiseTimeouts / 30, 0, 1);
-      const low = isLowHullState(state);
-      return {
-        mode: low ? "critical-cruise" : "cruise",
-        bgmId: "cruise",
-        bgm: 0.62 + danger * 0.12,
-        bed: 0.0001,
-        ambient: 0.004 + danger * 0.004,
-        filter: low ? 1500 : 1280 + danger * 260,
-        ambientFilter: 580 + danger * 180,
-        tempo: low ? 330 : 470,
-        root: threat?.side === "right" ? 123.47 : 116.54,
-        noteGain: low ? 0.34 : 0.28,
-        scale: low ? "critical" : "combat"
-      };
-    }
-    return { mode: "preflight", bgmId: "preflight", bgm: 0.52, bed: 0.0001, ambient: 0.003, filter: 1180, ambientFilter: 460, tempo: 680, root: 130.81, noteGain: 0.28, scale: "preflight" };
-  }
-
-  if (view === "result") {
-    return { mode: "report", bgmId: "report", bgm: 0.46, bed: 0.0001, ambient: 0.003, filter: 1160, ambientFilter: 420, tempo: 920, root: 174.61, noteGain: 0.22, scale: "report" };
-  }
-
-  return { mode: "menu", bgmId: "menu", bgm: 0.44, bed: 0.0001, ambient: 0.003, filter: 1040, ambientFilter: 440, tempo: 1040, root: 110, noteGain: 0.2, scale: "menu" };
-}
-
-function playMusicBeat() {
-  const director = audioDirector;
-  if (!director || !musicEnabled) return;
-  const profile = getAudioProfile();
-  if (!profile.tempo) return;
-  director.beat += 1;
-  const root = profile.root || 146.83;
-  const scales = {
-    menu: [0, 3, 7, 10, 7, 3, -2, 0],
-    preflight: [0, 3, 7, 10, 7, 5, 3, -2],
-    calibration: [0, 3, 5, 7, 10, 7, 5, 3],
-    combat: [0, 3, 5, 7, 10, 7, 5, 3],
-    critical: [0, 1, 3, 5, 6, 5, 3, 1],
-    report: [0, 3, 7, 10, 12, 10, 7, 3],
-    shutdown: [0]
-  };
-  const scale = scales[profile.scale] || scales.menu;
-  const note = musicSemitone(root, scale[director.beat % scale.length]);
-  const gain = profile.noteGain || 0.05;
-  const isCombat = profile.mode.includes("combat");
-  const barStep = director.beat % 8;
-
-  if (barStep === 1) {
-    const chordSets = {
-      menu: [[0, 3, 7], [-2, 3, 7]],
-      preflight: [[0, 3, 7], [-2, 3, 7]],
-      calibration: [[0, 5, 10], [3, 7, 12]],
-      combat: [[0, 3, 10], [-2, 3, 7]],
-      critical: [[0, 1, 6], [-1, 3, 6]],
-      report: [[0, 3, 7], [3, 7, 12]]
-    };
-    const chords = chordSets[profile.scale] || chordSets.menu;
-    musicChord(root, chords[Math.floor(director.beat / 8) % chords.length], isCombat ? 1.05 : 1.3, gain * 0.34, 0.01, "sine");
-  }
-
-  if (barStep === 1 || barStep === 5) {
-    musicTone(root / 2, isCombat ? 0.42 : 0.5, "triangle", gain * 0.38, 0.01);
-  }
-
-  if (barStep === 3 || barStep === 7) {
-    musicTone(musicSemitone(root / 2, 7), 0.28, "sine", gain * 0.18, 0.02);
-  }
-
-  musicTone(note, isCombat ? 0.2 : 0.24, "triangle", gain * (isCombat ? 0.8 : 0.7));
-  if (director.beat % 2 === 0) {
-    musicTone(note * 2, 0.08, "sine", gain * 0.16, 0.07);
-  }
-  if (isCombat && director.beat % 4 === 0) {
-    musicTone(musicSemitone(root / 2, scale[(director.beat / 4) % scale.length] || 0), 0.16, "sine", gain * 0.3, 0.03);
-  }
-  flashAudioBeat(profile);
-}
-
-function syncMusicPulse(profile, allowFallback = true) {
-  if (musicPulseTimer && (!musicEnabled || !profile.tempo || !allowFallback)) {
-    window.clearInterval(musicPulseTimer);
-    musicPulseTimer = null;
-    if (audioDirector) audioDirector.tempo = 0;
-    return;
-  }
-  if (!musicEnabled || !profile.tempo || !allowFallback) return;
-  if (audioDirector?.tempo === profile.tempo && musicPulseTimer) return;
-  if (musicPulseTimer) window.clearInterval(musicPulseTimer);
-  if (audioDirector) audioDirector.tempo = profile.tempo;
-  musicPulseTimer = window.setInterval(playMusicBeat, profile.tempo);
-  window.setTimeout(playMusicBeat, 90);
-  window.setTimeout(playMusicBeat, 360);
+  audioDirector.playSound(kind, options);
 }
 
 function syncAudioDirector(forceStart = false) {
-  if (!forceStart && !audioDirector) return;
-  if (!musicEnabled && !audioDirector) return;
-  const profile = getAudioProfile();
-  const director = musicEnabled || audioDirector ? ensureAudioDirector(forceStart) : null;
-  if (!director) return;
-  director.ctx.resume?.();
-  const mix = getVolumeProfile();
-  const now = director.ctx.currentTime;
-  const ramp = forceStart ? 0.18 : 0.42;
-  director.master.gain.cancelScheduledValues(now);
-  director.bgmGain.gain.cancelScheduledValues(now);
-  director.bedGain?.gain.cancelScheduledValues(now);
-  director.ambientGain.gain.cancelScheduledValues(now);
-  director.sfxGain.gain.cancelScheduledValues(now);
-  director.alertGain.gain.cancelScheduledValues(now);
-  director.bgmFilter.frequency.cancelScheduledValues(now);
-  director.ambientFilter.frequency.cancelScheduledValues(now);
-  director.master.gain.linearRampToValueAtTime(mix.master || 0.0001, now + ramp);
-  director.bgmGain.gain.linearRampToValueAtTime((profile.bgm || 0) * mix.bgm || 0.0001, now + ramp);
-  director.bedGain?.gain.linearRampToValueAtTime((profile.bed || 0) * mix.bgm || 0.0001, now + ramp);
-  director.ambientGain.gain.linearRampToValueAtTime((profile.ambient || 0) * mix.ambient || 0.0001, now + ramp);
-  director.sfxGain.gain.linearRampToValueAtTime(mix.sfx || 0.0001, now + 0.08);
-  director.alertGain.gain.linearRampToValueAtTime(mix.alert || 0.0001, now + 0.08);
-  director.bgmFilter.frequency.linearRampToValueAtTime(profile.filter || 300, now + ramp);
-  director.ambientFilter.frequency.linearRampToValueAtTime(profile.ambientFilter || 500, now + ramp);
-  if (profile.root) {
-    director.drone.frequency.linearRampToValueAtTime(profile.root, now + ramp);
-    director.sub.frequency.linearRampToValueAtTime(profile.root / 2, now + ramp);
-  }
-  director.mode = profile.mode;
-  const hasAssetLoop = syncBgmLoop(profile, director);
-  syncMusicPulse(profile, !hasAssetLoop);
+  audioDirector.sync(forceStart);
 }
 
 function bootDesktopAudioIfNeeded() {
-  if (!IS_DESKTOP_RUNTIME || desktopAudioBooted || !musicEnabled) return;
-  desktopAudioBooted = true;
-  window.setTimeout(() => {
-    syncAudioDirector(true);
-    const bgmId = getAudioProfile().bgmId;
-    if (bgmId) {
-      loadBgmBuffer(bgmId)?.then(() => {
-        if (musicEnabled) syncAudioDirector(true);
-      });
-    }
-  }, 120);
+  audioDirector.bootDesktopIfNeeded();
 }
 
 function wakeMusicIfNeeded() {
-  if (!musicEnabled) return;
-  if (!audioDirector || audioDirector.ctx?.state === "suspended" || !musicPulseTimer) {
-    syncAudioDirector(true);
-  }
+  audioDirector.wakeMusicIfNeeded();
 }
 
 function stopAudioDirector() {
-  if (musicPulseTimer) {
-    window.clearInterval(musicPulseTimer);
-    musicPulseTimer = null;
-  }
-  if (!audioDirector) return;
-  stopBgmLoop(audioDirector);
-  const now = audioDirector.ctx.currentTime;
-  audioDirector.bgmGain.gain.cancelScheduledValues(now);
-  audioDirector.bedGain?.gain.cancelScheduledValues(now);
-  audioDirector.ambientGain.gain.cancelScheduledValues(now);
-  audioDirector.bgmGain.gain.linearRampToValueAtTime(0.0001, now + 0.35);
-  audioDirector.bedGain?.gain.linearRampToValueAtTime(0.0001, now + 0.35);
-  audioDirector.ambientGain.gain.linearRampToValueAtTime(0.0001, now + 0.35);
-  audioDirector.tempo = 0;
-}
-
-function flashAudioBeat(profile) {
-  if (!profile.mode || profile.mode === "muted") return;
-  if (audioBeatTimer) {
-    window.clearTimeout(audioBeatTimer);
-    audioBeatTimer = null;
-  }
-  document.querySelector(".app-shell")?.classList.remove("audio-beat");
+  audioDirector.stop();
 }
 
 function getPatternForAction(level, actionIndex) {
@@ -1633,18 +1057,11 @@ function getCurrentMonster() {
 }
 
 function generateHomeTargets(level) {
-  return makeHomeQueue(level);
+  return homeRules.generateHomeTargets(level);
 }
 
 function nextHomeTarget(currentState) {
-  if (!currentState.homeQueue?.length || currentState.targetIndex >= currentState.homeQueue.length) {
-    currentState.homeQueue = generateHomeTargets(currentState.level);
-    currentState.targetIndex = 0;
-  }
-  const sequence = currentState.homeQueue?.length ? currentState.homeQueue : HOME_KEYS;
-  const nextIndex = currentState.targetIndex % sequence.length;
-  currentState.currentTarget = sequence[nextIndex];
-  currentState.targetIndex += 1;
+  homeRules.nextHomeTarget(currentState);
 }
 
 function nextStrikePattern(currentState) {
@@ -3018,43 +2435,27 @@ function syncPhaserScene() {
 }
 
 function getHomeSceneSnapshot(width, height, pixelRatio = 1) {
-  const wave = getWaveProgress();
-  return {
-    width,
-    height,
-    pixelRatio,
-    wave,
-    levelWaveCount: state.level.waves.length,
-    palette: getHomePhaserPalette(),
-    event: state.sceneEvent || "idle",
-    status: state.status,
-    currentTarget: state.currentTarget,
-    leftLocked: state.leftLocked,
-    rightLocked: state.rightLocked,
-    chargedKeys: { ...state.chargedKeys },
-    completedTargets: state.completedTargets,
-    targetCount: state.level.targetCount,
-    corruption: clamp(state.corruption / 100, 0, 1),
-    driftCount: state.homeDriftCount,
-    combo: state.combo,
-    breaches: 0,
-    reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false
-  };
+  return sceneSnapshots.getHomeSceneSnapshot(width, height, pixelRatio);
 }
 
 function getHomePhaserPalette() {
-  return {
-    bg: "#071018",
-    wall: 0x0b1f2a,
-    floor: 0x102c36,
-    accent: 0x45f7e4,
-    accentSoft: 0x79e8ff,
-    secondary: 0xffd66e,
-    danger: 0xff625c,
-    green: 0x62ff9d,
-    fog: 0x123845,
-    label: "#bdeeff"
-  };
+  return sceneSnapshots.getHomePhaserPalette();
+}
+
+function getAssetManifest() {
+  return sceneSnapshots.getAssetManifest();
+}
+
+function getSceneBackground(sceneId) {
+  return sceneSnapshots.getSceneBackground(sceneId);
+}
+
+function getK01ConceptImage() {
+  return sceneSnapshots.getK01ConceptImage();
+}
+
+function getMonsterPreviewImage(nameOrId = "driftZombie") {
+  return sceneSnapshots.getMonsterPreviewImage(nameOrId);
 }
 
 function phaserTextStyle(style, pixelRatio = window.devicePixelRatio || 1) {
@@ -3062,34 +2463,6 @@ function phaserTextStyle(style, pixelRatio = window.devicePixelRatio || 1) {
     resolution: Math.min(pixelRatio || 1, 2),
     ...style
   };
-}
-
-function getAssetManifest() {
-  return window.KeyPilotAssets || {};
-}
-
-function getSceneBackground(sceneId) {
-  return getAssetManifest().scenes?.[sceneId]?.background || "";
-}
-
-function getK01ConceptImage() {
-  const k01 = getAssetManifest().characters?.k01 || {};
-  return k01.preview || "";
-}
-
-function getMonsterPreviewImage(nameOrId = "driftZombie") {
-  const monsters = getAssetManifest().monsters || {};
-  let id = nameOrId;
-  if (!monsters[id]) {
-    const name = String(nameOrId);
-    if (name.includes("铁") || name.includes("装甲")) id = "ironWalker";
-    else if (name.includes("分裂") || name.includes("残影")) id = "splitPhantom";
-    else if (name.includes("突进") || name.includes("爬行")) id = "rushCrawler";
-    else if (name.includes("核心") || name.includes("Boss")) id = "oldCoordinateCore";
-    else id = "driftZombie";
-  }
-  const monster = monsters[id] || monsters.driftZombie || {};
-  return monster.preview || "";
 }
 
 function sceneBackgroundStyle(sceneId) {
@@ -3365,189 +2738,19 @@ function drawPhaserPulse(scene, x, y, color, alpha, startRadius, endRadius, redu
 }
 
 function getStrikeSceneSnapshot(width, height, pixelRatio = 1) {
-  const transition = state.roomTransition;
-  const encounter = transition?.toEncounter || getStrikeEncounter();
-  const missionClearing = Boolean(state.missionClearing);
-  const pattern = transition?.toEncounter?.pattern || getCurrentPattern();
-  const wave = getWaveProgress();
-  const room = getStrikeRoomTheme(encounter.roomId || encounter.waveIndex || 0);
-  const fingerGuide = getCurrentFingerGuide();
-  return {
-    width,
-    height,
-    pixelRatio,
-    pattern,
-    encounter,
-    fingerGuide,
-    missionClearing,
-    wave,
-    levelWaveCount: STRIKE_ROOM_THEMES.length,
-    room,
-    roomTransition: transition ? {
-      fromRoomId: transition.fromRoomId,
-      toRoomId: transition.toRoomId,
-      startedAt: transition.startedAt,
-      durationMs: transition.durationMs,
-      progress: clamp((Date.now() - transition.startedAt) / transition.durationMs, 0, 1)
-    } : null,
-    roomsCleared: state.roomsCleared || 0,
-    bossCleared: Boolean(state.bossCleared),
-    roomProgress: {
-      index: encounter.roomIndex || 0,
-      localIndex: encounter.roomLocalIndex || 0,
-      total: encounter.roomTotal || 1,
-      roomCount: encounter.totalRooms || STRIKE_ROOM_THEMES.length
-    },
-    palette: getStrikePhaserPalette(room.id),
-    event: state.sceneEvent || "idle",
-    sceneNonce: state.sceneNonce,
-    pathStep: missionClearing ? pattern.length : transition ? 0 : state.pathStep,
-    currentTarget: missionClearing ? "" : transition?.toEncounter?.pattern?.[0] || state.currentTarget,
-    pressure: clamp(state.monsterPressure / 100, 0, 1.2),
-    corruption: clamp(state.corruption / 100, 0, 1),
-    breaches: state.breaches,
-    hull: state.hull,
-    shield: state.shield,
-    energy: state.energy,
-    combo: state.combo,
-    monstersCleared: state.monstersCleared,
-    completedActions: state.completedActions,
-    targetActions: state.level.targetActions,
-    reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false
-  };
+  return sceneSnapshots.getStrikeSceneSnapshot(width, height, pixelRatio);
 }
 
 function getCruiseSceneSnapshot(width, height, pixelRatio = 1) {
-  const threat = getCurrentCruiseThreat();
-  const guide = threat ? FINGER_GUIDE_BY_ID[threat.guideId] : null;
-  const wave = getWaveProgress();
-  const timeRatio = getCruiseThreatTimeRatio();
-  const progress = getCruiseThreatProgress();
-  const introRemaining = getCruiseIntroRemaining();
-  const introTotal = Math.max(1, (state.cruiseIntroUntil || 0) - (state.cruiseIntroStartedAt || state.startedAt || Date.now()));
-  const roundInfo = getCruiseRoundInfo();
-  const roundThreats = getCruiseRoundThreats();
-  const shieldDamage = clamp(
-    ((100 - state.shield) / 100) * 0.5
-      + ((100 - state.hull) / 100) * 0.32
-      + (state.cruiseTimeouts || 0) * 0.025
-      + (state.breaches || 0) * 0.08,
-    0,
-    1
-  );
-  return {
-    width,
-    height,
-    pixelRatio,
-    threat,
-    fingerGuide: guide,
-    wave,
-    levelWaveCount: state.level.waves.length,
-    room: { id: "cruise", name: "巡航防线舱" },
-    palette: getCruisePhaserPalette(),
-    event: state.sceneEvent || "idle",
-    sceneNonce: state.sceneNonce,
-    currentTarget: state.currentTarget,
-    introActive: isCruiseIntroActive(),
-    introRemaining,
-    introProgress: introRemaining ? clamp(1 - introRemaining / introTotal, 0, 1) : 1,
-    roundInfo,
-    roundThreats,
-    activeRoundStep: threat?.roundStep || 0,
-    activeThreatId: threat?.id || "",
-    timeRatio,
-    threatProgress: progress,
-    threatStartedAt: state.threatStartedAt,
-    threatDeadlineAt: state.threatDeadlineAt,
-    completedActions: state.completedActions,
-    targetActions: state.level.targetActions,
-    cruiseIntercepts: state.cruiseIntercepts,
-    cruiseTimeouts: state.cruiseTimeouts,
-    cruiseMisses: state.cruiseMisses,
-    cruiseWaveClears: state.cruiseWaveClears,
-    corruption: clamp(state.corruption / 100, 0, 1),
-    shieldDamage,
-    breaches: state.breaches,
-    hull: state.hull,
-    shield: state.shield,
-    energy: state.energy,
-    combo: state.combo,
-    reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false
-  };
+  return sceneSnapshots.getCruiseSceneSnapshot(width, height, pixelRatio);
 }
 
 function getCruisePhaserPalette() {
-  return {
-    bg: "#04090d",
-    accent: 0x45f7e4,
-    accentSoft: 0x9defff,
-    secondary: 0xffd66e,
-    danger: 0xff625c,
-    green: 0x62ff9d,
-    fog: 0x0b2528,
-    label: "#bdeeff"
-  };
+  return sceneSnapshots.getCruisePhaserPalette();
 }
 
 function getStrikePhaserPalette(roomId) {
-  const palettes = {
-    gate: {
-      bg: "#061018",
-      wall: 0x0b2530,
-      floor: 0x102f36,
-      accent: 0x45f7e4,
-      accentSoft: 0x79e8ff,
-      secondary: 0xffd66e,
-      danger: 0xff625c,
-      fog: 0x123845,
-      label: "#9bdce7"
-    },
-    pipe: {
-      bg: "#07120d",
-      wall: 0x102819,
-      floor: 0x153526,
-      accent: 0x62ff9d,
-      accentSoft: 0x9bffd1,
-      secondary: 0xffd66e,
-      danger: 0xff625c,
-      fog: 0x163d2b,
-      label: "#b5ffd7"
-    },
-    nest: {
-      bg: "#16080d",
-      wall: 0x31131b,
-      floor: 0x2b1a19,
-      accent: 0xff9d45,
-      accentSoft: 0xffd66e,
-      secondary: 0x45f7e4,
-      danger: 0xff625c,
-      fog: 0x4b1922,
-      label: "#ffd2a8"
-    },
-    blackout: {
-      bg: "#02060c",
-      wall: 0x111a2b,
-      floor: 0x141f2a,
-      accent: 0x8ea7ff,
-      accentSoft: 0xd9e3ff,
-      secondary: 0xffd66e,
-      danger: 0xff625c,
-      fog: 0x0a1220,
-      label: "#d6e2ff"
-    },
-    core: {
-      bg: "#100711",
-      wall: 0x24102b,
-      floor: 0x24151d,
-      accent: 0xff625c,
-      accentSoft: 0xffd66e,
-      secondary: 0x8ea7ff,
-      danger: 0xff625c,
-      fog: 0x3a1328,
-      label: "#ffc7c3"
-    }
-  };
-  return palettes[roomId] || palettes.gate;
+  return sceneSnapshots.getStrikePhaserPalette(roomId);
 }
 
 function renderStrikePhaserWorld(scene, snapshot) {
@@ -4391,6 +3594,7 @@ function drawCanvasSceneEffects(ctx, width, height, now) {
 function renderTopbar() {
   const resultCount = getResults().length;
   const inventoryTotal = getInventoryTotal();
+  const audioPrefs = audioDirector.getPrefs();
   return `
     <header class="topbar">
       <div class="brand">
@@ -4407,25 +3611,26 @@ function renderTopbar() {
         <span>${resultCount ? `最近记录 ${resultCount}` : "等待首次训练"}</span>
         <span>${inventoryTotal ? `仓库 ${inventoryTotal}` : "仓库空"}</span>
         <button class="top-action fullscreen-toggle" type="button" data-toggle-fullscreen aria-label="切换全屏">FULL</button>
-        <button class="sound-toggle music-toggle ${musicEnabled ? "on" : ""}" type="button" data-toggle-music aria-label="切换背景音乐">${musicEnabled ? "BGM ON" : "BGM OFF"}</button>
-        <button class="sound-toggle ${soundEnabled ? "on" : ""}" type="button" data-toggle-sound aria-label="切换音效">${soundEnabled ? "SFX ON" : "SFX OFF"}</button>
-        <button class="sound-toggle volume-toggle" type="button" data-toggle-volume aria-label="切换音量档位">VOL ${getVolumeProfile().label}</button>
+        <button class="sound-toggle music-toggle ${audioPrefs.musicEnabled ? "on" : ""}" type="button" data-toggle-music aria-label="切换背景音乐">${audioPrefs.musicEnabled ? "BGM ON" : "BGM OFF"}</button>
+        <button class="sound-toggle ${audioPrefs.soundEnabled ? "on" : ""}" type="button" data-toggle-sound aria-label="切换音效">${audioPrefs.soundEnabled ? "SFX ON" : "SFX OFF"}</button>
+        <button class="sound-toggle volume-toggle" type="button" data-toggle-volume aria-label="切换音量档位">VOL ${audioPrefs.volumeLabel}</button>
       </div>
     </header>
   `;
 }
 
 function syncAudioToggleButtons() {
+  const audioPrefs = audioDirector.getPrefs();
   document.querySelectorAll("[data-toggle-music]").forEach((button) => {
-    button.classList.toggle("on", musicEnabled);
-    button.textContent = musicEnabled ? "BGM ON" : "BGM OFF";
+    button.classList.toggle("on", audioPrefs.musicEnabled);
+    button.textContent = audioPrefs.musicEnabled ? "BGM ON" : "BGM OFF";
   });
   document.querySelectorAll("[data-toggle-sound]").forEach((button) => {
-    button.classList.toggle("on", soundEnabled);
-    button.textContent = soundEnabled ? "SFX ON" : "SFX OFF";
+    button.classList.toggle("on", audioPrefs.soundEnabled);
+    button.textContent = audioPrefs.soundEnabled ? "SFX ON" : "SFX OFF";
   });
   document.querySelectorAll("[data-toggle-volume]").forEach((button) => {
-    button.textContent = `VOL ${getVolumeProfile().label}`;
+    button.textContent = `VOL ${audioPrefs.volumeLabel}`;
   });
 }
 
@@ -5480,15 +4685,7 @@ function getDebugState() {
     inputLockedRemaining: state?.inputLockedUntil ? Math.max(0, state.inputLockedUntil - Date.now()) : 0,
     resultReason: state?.result?.reason || "",
     deferredFinishPending: finishLifecycle.pending(),
-    audio: {
-      musicEnabled,
-      soundEnabled,
-      volume: audioVolumeMode,
-      bgmId: audioDirector?.currentBgmId || "",
-      usingAssetBgm: Boolean(audioDirector?.usingAssetBgm),
-      desktop: IS_DESKTOP_RUNTIME,
-      audioState: audioDirector?.ctx?.state || ""
-    },
+    audio: audioDirector.getDebugState(),
     currentPattern: state ? getCurrentPattern(state) : [],
     cruiseQueue: (state?.cruiseQueue || []).map((threat) => ({
       key: threat.key,
@@ -5554,33 +4751,20 @@ app.addEventListener("click", (event) => {
     return;
   }
   if (toggleSound) {
-    soundEnabled = !soundEnabled;
-    if (soundEnabled) playSound("correct");
-    saveAudioPrefs();
+    audioDirector.toggleSound();
     syncAudioToggleButtons();
     if (!isRoomCombatLive() && !isCruiseCombatLive()) render();
     return;
   }
   if (toggleMusic) {
-    musicEnabled = !musicEnabled;
-    saveAudioPrefs();
-    if (musicEnabled) {
-      syncAudioDirector(true);
-      playSound("report");
-    } else {
-      stopAudioDirector();
-    }
+    audioDirector.toggleMusic();
     syncAudioToggleButtons();
     if (!isRoomCombatLive() && !isCruiseCombatLive()) render();
     return;
   }
   if (toggleVolume) {
-    const modes = ["soft", "standard", "strong"];
-    audioVolumeMode = modes[(modes.indexOf(audioVolumeMode) + 1) % modes.length] || "standard";
-    saveAudioPrefs();
-    syncAudioDirector(true);
+    audioDirector.cycleVolume();
     syncAudioToggleButtons();
-    if (soundEnabled) playSound("base_lock");
     if (!isRoomCombatLive() && !isCruiseCombatLive()) render();
     return;
   }
