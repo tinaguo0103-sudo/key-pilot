@@ -388,6 +388,14 @@ async function assertCruiseBattleObjectsReady(page, label = "03 battle objects")
   assert(actorCount === roundSize, `${label}: wave actors should match round size, got ${actorCount}/${roundSize}`);
   assert(visibleCount >= 1 && visibleCount <= Math.min(3, roundSize), `${label}: visible wave actors should be active plus near queue only, got ${visibleCount}/${roundSize}`);
   assert(sceneDebug.wave?.aggressiveMotion === true, `${label}: wave controller should use the aggressive pounce motion system`);
+  assert(sceneDebug.wave?.motionVersion === "pounce-v08", `${label}: expected pounce-v08 motion, got ${sceneDebug.wave?.motionVersion}`);
+  assert((sceneDebug.wave?.staleClearedVisible || 0) === 0, `${label}: cleared threats should not remain visible, got ${sceneDebug.wave?.staleClearedVisible}`);
+  if (!sceneDebug.introActive && sceneDebug.wave?.activeId) {
+    assert(
+      !["queued", "hidden", "cleared"].includes(sceneDebug.wave?.activeMotionPhase),
+      `${label}: active threat should be in an attack phase, got ${sceneDebug.wave?.activeMotionPhase}`
+    );
+  }
   assert(sceneDebug.canvasCount === 1, `${label}: cruise canvas count should stay 1, got ${sceneDebug.canvasCount}`);
 }
 
