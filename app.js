@@ -481,6 +481,23 @@ const cruiseRules = window.KeyPilotCruiseRules.createCruiseRules({
   fingerWeights: CRUISE_FINGER_WEIGHTS,
   makeBalancedSideOrder
 });
+const strikeRules = window.KeyPilotStrikeRules.createStrikeRules({
+  fingerGroups: FINGER_GROUPS,
+  fingerGuideById: FINGER_GUIDE_BY_ID,
+  calibrationDrills: STRIKE_CALIBRATION_DRILLS,
+  modifiers: STRIKE_MODIFIERS,
+  combatRules: STRIKE_COMBAT_RULES,
+  monsterVariants: STRIKE_MONSTER_VARIANTS,
+  roomThemes: STRIKE_ROOM_THEMES,
+  roomChain: STRIKE_ROOM_CHAIN,
+  shuffle,
+  pick,
+  makeShuffledRun,
+  makeBalancedSideOrder,
+  getFingerGuideForKey,
+  getPatternForAction,
+  getWaveProgress
+});
 
 function getResults() {
   return progressStore.getResults();
@@ -616,21 +633,11 @@ function makeCruiseQueue(level) {
 }
 
 function getAlternateStrikeTarget(pattern, wave, index) {
-  const [home, target] = pattern;
-  const options = wave.patterns
-    .filter((item) => item[0] === home && item[1] !== target)
-    .map((item) => item[1]);
-  if (options.length) return options[index % options.length];
-
-  const guide = getFingerGuideForKey(home) || getFingerGuideForKey(target);
-  const guideOptions = (guide?.keys || [])
-    .filter((key) => key !== guide.home && key !== target);
-  if (!guideOptions.length) return target;
-  return guideOptions[index % guideOptions.length];
+  return strikeRules.getAlternateStrikeTarget(pattern, wave, index);
 }
 
 function getStrikeAttackKeysForGuide(guide) {
-  return (guide?.keys || []).filter((key) => key !== guide.home);
+  return strikeRules.getStrikeAttackKeysForGuide(guide);
 }
 
 function hasLongSideRun(sequence, maxRun = 2) {
@@ -701,253 +708,71 @@ function makeBalancedSideOrder(totalCount) {
 }
 
 function makeEvenEntryOrder(entries) {
-  const remaining = shuffle(entries);
-  const ordered = [];
-  let lastGuideId = "";
-
-  while (remaining.length) {
-    const candidates = remaining.filter((entry) => entry.guide.id !== lastGuideId);
-    const pool = candidates.length ? candidates : remaining;
-    const counts = remaining.reduce((map, entry) => {
-      map[entry.guide.id] = (map[entry.guide.id] || 0) + 1;
-      return map;
-    }, {});
-    const maxCount = Math.max(...pool.map((entry) => counts[entry.guide.id] || 0));
-    const strongest = pool.filter((entry) => counts[entry.guide.id] === maxCount);
-    const picked = pick(strongest);
-    const index = remaining.indexOf(picked);
-    remaining.splice(index, 1);
-    ordered.push(picked);
-    lastGuideId = picked.guide.id;
-  }
-
-  return ordered;
+  return strikeRules.makeEvenEntryOrder(entries);
 }
 
 function makeSideStrikeEntries(sideGuides, count) {
-  if (!sideGuides.length || count <= 0) return [];
-  const baseCount = Math.floor(count / sideGuides.length);
-  const extraCount = count % sideGuides.length;
-  const extraGuideIds = new Set(shuffle(sideGuides).slice(0, extraCount).map((entry) => entry.guide.id));
-  const entries = [];
-
-  sideGuides.forEach((entry) => {
-    const guideCount = baseCount + (extraGuideIds.has(entry.guide.id) ? 1 : 0);
-    const pool = makeShuffledRun(entry.attackKeys, Math.max(entry.attackKeys.length, guideCount), (key) => key);
-    for (let index = 0; index < guideCount; index += 1) {
-      const target = pool[index % pool.length] || entry.attackKeys[index % entry.attackKeys.length];
-      entries.push({ guide: entry.guide, target });
-    }
-  });
-
-  return makeEvenEntryOrder(entries);
+  return strikeRules.makeSideStrikeEntries(sideGuides, count);
 }
 
 function makeBalancedStrikePatterns(totalCount) {
-  const guides = FINGER_GROUPS
-    .map((guide) => ({ guide, attackKeys: getStrikeAttackKeysForGuide(guide) }))
-    .filter((entry) => entry.attackKeys.length);
-  if (!guides.length || totalCount <= 0) return [];
-
-  const sideOrder = makeBalancedSideOrder(totalCount);
-  const sideCounts = sideOrder.reduce((map, side) => {
-    map[side] = (map[side] || 0) + 1;
-    return map;
-  }, {});
-  const sideQueues = {
-    left: makeSideStrikeEntries(guides.filter((entry) => entry.guide.side === "left"), sideCounts.left || 0),
-    right: makeSideStrikeEntries(guides.filter((entry) => entry.guide.side === "right"), sideCounts.right || 0)
-  };
-
-  return sideOrder.map((side) => {
-    const entry = sideQueues[side].shift() || sideQueues.left.shift() || sideQueues.right.shift();
-    return [entry.guide.home, entry.target, entry.guide.home];
-  });
+  return strikeRules.makeBalancedStrikePatterns(totalCount);
 }
 
 function makeCombatPattern(pattern, wave, index, modifier) {
-  const [home, target] = pattern;
-  if (!home || !target) return pattern;
-
-  if (modifier.id === "shield") {
-    return [home, target, home, target, home];
-  }
-
-  if (modifier.id === "split") {
-    const alternate = getAlternateStrikeTarget(pattern, wave, index + 1);
-    return [home, target, home, alternate, home];
-  }
-
-  return pattern;
+  return strikeRules.makeCombatPattern(pattern, wave, index, modifier);
 }
 
 function getEncounterRule(modifierOrEncounter) {
-  const id = modifierOrEncounter?.modifier?.id || modifierOrEncounter?.id || "rush";
-  return STRIKE_COMBAT_RULES[id] || STRIKE_COMBAT_RULES.rush;
+  return strikeRules.getEncounterRule(modifierOrEncounter);
 }
 
 function getEncounterRuleLabel(encounter) {
-  return getEncounterRule(encounter).label;
+  return strikeRules.getEncounterRuleLabel(encounter);
 }
 
 function getEncounterRuleHint(encounter) {
-  return encounter?.ruleHint || getEncounterRule(encounter).hint;
+  return strikeRules.getEncounterRuleHint(encounter);
 }
 
 function getEncounterEntryPressure(encounter) {
-  const rule = getEncounterRule(encounter);
-  const routePressure = encounter?.pattern?.length > 3 ? 6 : 0;
-  return rule.pressure + routePressure;
+  return strikeRules.getEncounterEntryPressure(encounter);
 }
 
 function isStrikeReturnStep(pattern, step) {
-  return step > 0 && pattern[step] === pattern[0];
+  return strikeRules.isStrikeReturnStep(pattern, step);
 }
 
 function getStrikeStepLabel(pattern, step) {
-  if (step === 0) return "基地";
-  if (isStrikeReturnStep(pattern, step)) return "收臂";
-  return step > 1 ? "补击" : "命中";
+  return strikeRules.getStrikeStepLabel(pattern, step);
 }
 
 function getVisibleStrikePadKeys(pattern, pathStep) {
-  const home = pattern[0];
-  const currentKey = pattern[pathStep] || home;
-  const attackIndexes = pattern
-    .map((key, index) => ({ key, index }))
-    .filter((item) => item.index > 0 && item.key !== home);
-  const nextAttack = attackIndexes.find((item) => item.index >= pathStep) || attackIndexes[attackIndexes.length - 1];
-  const nextReturnIndex = pattern.findIndex((key, index) => index >= pathStep && index > 0 && key === home);
-  const returnIndex = nextReturnIndex >= 0 ? nextReturnIndex : pattern.length - 1;
-
-  return {
-    base: home,
-    attack: pathStep > 0 && currentKey !== home ? currentKey : nextAttack?.key || pattern[1] || home,
-    returnHome: pattern[returnIndex] || home,
-    attackActive: pathStep > 0 && currentKey !== home,
-    returnActive: isStrikeReturnStep(pattern, pathStep)
-  };
+  return strikeRules.getVisibleStrikePadKeys(pattern, pathStep);
 }
 
 function getStrikeModifierById(id) {
-  return STRIKE_MODIFIERS.find((modifier) => modifier.id === id) || STRIKE_MODIFIERS[0];
+  return strikeRules.getStrikeModifierById(id);
 }
 
 function getStrikeRoomThemeById(id) {
-  return STRIKE_ROOM_THEMES.find((room) => room.id === id) || STRIKE_ROOM_THEMES[0];
+  return strikeRules.getStrikeRoomThemeById(id);
 }
 
 function makeStrikeRoomQueue() {
-  const totalRooms = STRIKE_ROOM_CHAIN.length;
-  const totalEncounters = STRIKE_ROOM_CHAIN.reduce((sum, room) => sum + room.patterns.length, 0);
-  const balancedPatterns = makeBalancedStrikePatterns(totalEncounters);
-  let patternIndex = 0;
-  return STRIKE_ROOM_CHAIN.flatMap((roomConfig, roomIndex) => {
-    const room = getStrikeRoomThemeById(roomConfig.id);
-    const roomTotal = roomConfig.patterns.length;
-    return roomConfig.patterns.map((pattern, roomLocalIndex) => {
-      const basePattern = balancedPatterns[patternIndex] || pattern;
-      patternIndex += 1;
-      const modifierOffset = Math.floor(Math.random() * roomConfig.modifiers.length);
-      const laneOffset = Math.floor(Math.random() * roomConfig.lanes.length);
-      const spawnOffset = Math.floor(Math.random() * roomConfig.spawnSides.length);
-      const modifier = getStrikeModifierById(roomConfig.modifiers[(roomLocalIndex + modifierOffset) % roomConfig.modifiers.length] || roomConfig.modifiers[0]);
-      const combatPattern = makeCombatPattern(basePattern, roomConfig, roomLocalIndex, modifier);
-      const bossPhase = roomConfig.mechanic === "boss" ? roomLocalIndex + 1 : 0;
-      return {
-        pattern: combatPattern,
-        basePattern,
-        monster: roomConfig.monster,
-        monsterId: roomConfig.monsterId,
-        mechanic: roomConfig.mechanic,
-        modifier,
-        ruleLabel: getEncounterRule(modifier).label,
-        ruleHint: getEncounterRule(modifier).hint,
-        lane: roomConfig.lanes[(roomLocalIndex + laneOffset) % roomConfig.lanes.length] || "mid",
-        spawnSide: roomConfig.spawnSides[(roomLocalIndex + spawnOffset) % roomConfig.spawnSides.length] || "right",
-        bossPhase,
-        roomId: room.id,
-        roomName: room.name,
-        roomIndex,
-        roomLocalIndex,
-        roomTotal,
-        totalRooms,
-        waveName: room.name,
-        waveIndex: roomIndex
-      };
-    });
-  });
+  return strikeRules.makeStrikeRoomQueue();
 }
 
 function makeStrikeQueue(level) {
-  if (level.mode !== "strike") return [];
-  if (level.id === "level-02-strike") return makeStrikeRoomQueue();
-  return level.waves.flatMap((wave, waveIndex) => {
-    const patterns = makeShuffledRun(wave.patterns, wave.count, (pattern) => pattern.join("-"));
-    const monsters = STRIKE_MONSTER_VARIANTS[wave.name] || [wave.monster || level.monster];
-    const modifiers = shuffle(STRIKE_MODIFIERS);
-    return patterns.map((pattern, index) => {
-      const monster = monsters[(index + Math.floor(Math.random() * monsters.length)) % monsters.length];
-      const modifier = modifiers[(index + waveIndex) % modifiers.length];
-      const combatPattern = makeCombatPattern(pattern, wave, index, modifier);
-      const lane = ["low", "mid", "high"][(index + waveIndex + Math.floor(Math.random() * 3)) % 3];
-      return {
-        pattern: combatPattern,
-        basePattern: pattern,
-        monster,
-        modifier,
-        ruleLabel: getEncounterRule(modifier).label,
-        ruleHint: getEncounterRule(modifier).hint,
-        lane,
-        waveName: wave.name,
-        waveIndex
-      };
-    });
-  });
+  return strikeRules.makeStrikeQueue(level);
 }
 
 function makeStrikeCalibrationQueue(level) {
-  if (level.mode !== "strike") return [];
-  return STRIKE_CALIBRATION_DRILLS.map((drill, index) => ({
-    ...drill,
-    index,
-    guide: FINGER_GUIDE_BY_ID[drill.guideId]
-  })).filter((drill) => drill.guide);
+  return strikeRules.makeStrikeCalibrationQueue(level);
 }
 
 function getStrikeEncounter(currentState = state) {
-  if (!currentState || currentState.level.mode !== "strike") return null;
-  const queue = currentState.strikeQueue || [];
-  if (queue.length && (
-    currentState.missionClearing
-      || currentState.completedActions >= queue.length
-      || currentState.completedActions >= currentState.level.targetActions
-  )) {
-    return queue[clamp(currentState.completedActions, 0, queue.length - 1)];
-  }
-  const fallbackPattern = getPatternForAction(currentState.level, currentState.completedActions);
-  const fallbackRoom = getStrikeRoomTheme(0);
-  return queue[currentState.completedActions] || {
-    pattern: fallbackPattern,
-    basePattern: fallbackPattern,
-    monster: currentState.level.monster,
-    monsterId: "driftZombie",
-    mechanic: "standard",
-    modifier: STRIKE_MODIFIERS[0],
-    ruleLabel: getEncounterRule(STRIKE_MODIFIERS[0]).label,
-    ruleHint: getEncounterRule(STRIKE_MODIFIERS[0]).hint,
-    lane: "mid",
-    waveName: getWaveProgress(currentState)?.name || "",
-    waveIndex: getWaveProgress(currentState)?.index || 0,
-    roomId: fallbackRoom.id,
-    roomName: fallbackRoom.name,
-    roomIndex: 0,
-    roomLocalIndex: 0,
-    roomTotal: 1,
-    totalRooms: 1,
-    spawnSide: "right",
-    bossPhase: 0
-  };
+  return strikeRules.getStrikeEncounter(currentState);
 }
 
 function triggerScene(eventName) {
@@ -2006,8 +1831,7 @@ function handleCruiseTimeouts() {
 }
 
 function getCurrentCalibrationDrill(currentState = state) {
-  if (!currentState || currentState.level.mode !== "strike") return null;
-  return currentState.calibrationQueue?.[currentState.calibrationIndex] || null;
+  return strikeRules.getCurrentCalibrationDrill(currentState);
 }
 
 function beginStrikeCombat() {
@@ -2051,8 +1875,7 @@ function skipStrikeCalibration() {
 }
 
 function getStrikeRoomTheme(indexOrId = 0) {
-  if (typeof indexOrId === "string") return getStrikeRoomThemeById(indexOrId);
-  return STRIKE_ROOM_THEMES[indexOrId] || STRIKE_ROOM_THEMES[STRIKE_ROOM_THEMES.length - 1];
+  return strikeRules.getStrikeRoomTheme(indexOrId);
 }
 
 function calculateAccuracy(currentState) {

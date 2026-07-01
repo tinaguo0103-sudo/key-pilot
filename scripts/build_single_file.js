@@ -48,6 +48,7 @@ const runtimeLifecycle = read("runtimeLifecycle.js");
 const debugBridge = read("debugBridge.js");
 const progressStore = read("progressStore.js");
 const cruiseRules = read("cruiseRules.js");
+const strikeRules = read("strikeRules.js");
 const roomScene = read("roomCombatScene.js");
 const cruiseScene = read("cruiseDefenseScene.js");
 const app = read("app.js");
@@ -81,6 +82,9 @@ ${progressStore}
     </script>
     <script>
 ${cruiseRules}
+    </script>
+    <script>
+${strikeRules}
     </script>
     <script>
 ${roomScene}
