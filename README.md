@@ -94,9 +94,10 @@ MVP 后续规划优先看：
 key-pilot-style-audio-bible-v0.7.md
 level-03-cruise-defense-prd-v0.7.md
 key-pilot-game-system-prd-v0.8.md
+key-pilot-monster-system-v0.1.md
 ```
 
-前两者定义后续关卡的美术、资产、音频和 03 巡航防线玩法；`v0.8` 文档把低血量、死亡、防线压迫和 03 动作验收收束成后续关卡通用标准。
+前三者定义后续关卡的美术、资产、音频、03 巡航防线玩法和全局战斗系统；`monster-system` 文档专门约束怪物分类、资产规格和 03 威胁重做方向。
 
 ## 可选本地服务
 

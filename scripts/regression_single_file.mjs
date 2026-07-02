@@ -390,6 +390,10 @@ async function assertCruiseBattleObjectsReady(page, label = "03 battle objects")
   assert(sceneDebug.wave?.aggressiveMotion === true, `${label}: wave controller should use the aggressive pounce motion system`);
   assert(sceneDebug.wave?.motionVersion === "pounce-v08", `${label}: expected pounce-v08 motion, got ${sceneDebug.wave?.motionVersion}`);
   assert((sceneDebug.wave?.staleClearedVisible || 0) === 0, `${label}: cleared threats should not remain visible, got ${sceneDebug.wave?.staleClearedVisible}`);
+  assert(sceneDebug.wave?.activeMobileType !== "turret", `${label}: turret must be a fixed device, not the moving threat actor`);
+  if (sceneDebug.wave?.activeTaxonomy === "device") {
+    assert((sceneDebug.wave?.visibleDeviceCount || 0) >= 1, `${label}: device threats should keep the turret fixed at the wall`);
+  }
   if (!sceneDebug.introActive && sceneDebug.wave?.activeId) {
     assert(
       !["queued", "hidden", "cleared"].includes(sceneDebug.wave?.activeMotionPhase),

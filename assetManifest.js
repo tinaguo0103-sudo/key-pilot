@@ -178,6 +178,11 @@
         quality: "approved",
         alpha: "clean",
         version: "v07",
+        taxonomy: {
+          turret: "device",
+          swarm: "creature",
+          projectile: "projectile"
+        },
         frameWidth: 362,
         frameHeight: 362,
         columns: 4,
