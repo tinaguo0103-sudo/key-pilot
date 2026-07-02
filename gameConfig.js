@@ -9,7 +9,7 @@ const HOME_SCENE_BG_KEY = "key-pilot-preflight-chamber-v03";
 const HOME_K01_TEXTURE_KEY = "key-pilot-k01-concept-v03";
 const RUNTIME_PARAMS = new URLSearchParams(window.location.search);
 const IS_DESKTOP_RUNTIME = RUNTIME_PARAMS.has("desktop") || RUNTIME_PARAMS.get("runtime") === "electron";
-const BUILD_LABEL = "v0.8.0 SYSTEM-DEFENSE";
+const BUILD_LABEL = "v0.9.0 THREAT-SYSTEM";
 
 const HOME_KEYS = ["a", "s", "d", "f", "j", "k", "l", ";"];
 const KEYBOARD_ROWS = [

@@ -111,102 +111,124 @@
     return n * n * n;
   }
 
-  function easeOutBack(t) {
+  function easeOutCubic(t) {
     const n = clamp(t, 0, 1);
-    const c1 = 1.70158;
-    const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(n - 1, 3) + c1 * Math.pow(n - 1, 2);
+    return 1 - Math.pow(1 - n, 3);
   }
 
-  function attackMotion(threat = {}, rawProgress = 0, timeRatio = 1) {
+  function easeInQuart(t) {
+    const n = clamp(t, 0, 1);
+    return n * n * n * n;
+  }
+
+  function projectileMotion(threat = {}, rawProgress = 0, timeRatio = 1) {
     const progress = clamp(rawProgress, 0, 1);
     const pressure = 1 - clamp(timeRatio, 0, 1);
-    if (threat.type === "turret") {
-      if (progress < 0.42) {
-        return {
-          phase: "lock",
-          t: 0.055 + progress * 0.1,
-          scaleBoost: 0.12 + pressure * 0.18,
-          shake: 0.6 + pressure * 1.8,
-          frameBias: progress < 0.24 ? 0 : 1
-        };
-      }
-      if (progress < 0.78) {
-        const local = (progress - 0.42) / 0.36;
-        return {
-          phase: "charge",
-          t: 0.16 + easeInCubic(local) * 0.46,
-          scaleBoost: 0.22 + local * 0.35,
-          shake: 2.2 + local * 3.4,
-          frameBias: 2
-        };
-      }
-      const local = (progress - 0.78) / 0.22;
+    if (progress < 0.22) {
       return {
-        phase: "slam",
-        t: clamp(0.62 + easeOutBack(local) * 0.34, 0.62, 0.99),
-        scaleBoost: 0.64 + local * 0.38,
-        shake: 6 + local * 8,
-        frameBias: 2
+        phase: threat.type === "turret" ? "charge" : "telegraph",
+        t: 0.04 + progress * 0.18,
+        scaleBoost: 0.02 + pressure * 0.025,
+        shake: 0,
+        frameBias: 0,
+        pathStyle: "ballistic"
       };
     }
-
-    if (threat.type === "swarm") {
-      if (progress < 0.28) {
-        return {
-          phase: "skitter",
-          t: 0.05 + progress * 0.18,
-          scaleBoost: pressure * 0.12,
-          shake: 3 + pressure * 5,
-          frameBias: Math.floor(progress * 18) % 2
-        };
-      }
-      if (progress < 0.72) {
-        const local = (progress - 0.28) / 0.44;
-        return {
-          phase: "rush",
-          t: 0.23 + Math.pow(local, 1.25) * 0.47,
-          scaleBoost: 0.18 + local * 0.42,
-          shake: 5 + local * 7,
-          frameBias: 1 + Math.floor(local * 6) % 2
-        };
-      }
-      const local = (progress - 0.72) / 0.28;
+    if (progress < 0.82) {
+      const local = (progress - 0.22) / 0.6;
       return {
-        phase: "leap",
-        t: clamp(0.7 + easeOutBack(local) * 0.27, 0.7, 0.99),
-        scaleBoost: 0.58 + local * 0.42,
-        shake: 9 + local * 10,
-        frameBias: 2
+        phase: threat.type === "turret" ? "fire" : "launch",
+        t: 0.12 + easeInQuart(local) * 0.68,
+        scaleBoost: 0.04 + local * 0.06,
+        shake: 0,
+        frameBias: local > 0.45 ? 1 : 0,
+        pathStyle: "ballistic"
       };
     }
+    const local = (progress - 0.82) / 0.18;
+    return {
+      phase: "terminal",
+      t: clamp(0.8 + easeOutCubic(local) * 0.18, 0.8, 0.985),
+      scaleBoost: 0.1 + pressure * 0.06,
+      shake: 0,
+      frameBias: 2,
+      pathStyle: "ballistic"
+    };
+  }
 
+  function creatureMotion(threat = {}, rawProgress = 0, timeRatio = 1) {
+    const progress = clamp(rawProgress, 0, 1);
+    const pressure = 1 - clamp(timeRatio, 0, 1);
     if (progress < 0.3) {
       return {
-        phase: "incoming",
-        t: 0.045 + progress * 0.16,
-        scaleBoost: pressure * 0.08,
-        shake: 0,
-        frameBias: 0
+        phase: "emerge",
+        t: 0.04 + progress * 0.22,
+        scaleBoost: pressure * 0.035,
+        shake: 1.2 + pressure * 1.4,
+        frameBias: Math.floor(progress * 16) % 2,
+        pathStyle: "creature"
       };
     }
     if (progress < 0.76) {
       const local = (progress - 0.3) / 0.46;
       return {
-        phase: "burn",
-        t: 0.2 + easeInCubic(local) * 0.5,
-        scaleBoost: 0.18 + local * 0.34,
-        shake: 1.5 + local * 2.4,
-        frameBias: 1
+        phase: "crawl",
+        t: 0.24 + Math.pow(local, 1.18) * 0.5,
+        scaleBoost: 0.04 + local * 0.12,
+        shake: 2.6 + local * 3.8,
+        frameBias: 1 + Math.floor(local * 8) % 2,
+        pathStyle: "creature"
       };
     }
     const local = (progress - 0.76) / 0.24;
     return {
-      phase: "pounce",
-      t: clamp(0.7 + easeOutBack(local) * 0.28, 0.7, 0.99),
-      scaleBoost: 0.52 + local * 0.36,
-      shake: 3 + local * 5,
-      frameBias: 2
+      phase: "lunge",
+      t: clamp(0.74 + easeOutCubic(local) * 0.24, 0.74, 0.985),
+      scaleBoost: 0.12 + local * 0.16,
+      shake: 5 + local * 5,
+      frameBias: 2,
+      pathStyle: "creature"
+    };
+  }
+
+  function deviceMotion(threat = {}, rawProgress = 0) {
+    const progress = clamp(rawProgress, 0, 1);
+    if (progress < 0.28) {
+      return { phase: "aim", frameBias: 0, chargeAlpha: 0.4 + progress, muzzleScale: 0.7 };
+    }
+    if (progress < 0.62) {
+      const local = (progress - 0.28) / 0.34;
+      return { phase: "charge", frameBias: 1, chargeAlpha: 0.62 + local * 0.28, muzzleScale: 0.84 + local * 0.36 };
+    }
+    return { phase: "fire", frameBias: 2, chargeAlpha: 0.84, muzzleScale: 1.14 + (progress - 0.62) * 0.22 };
+  }
+
+  function attackMotion(threat = {}, rawProgress = 0, timeRatio = 1) {
+    if (threat.type === "swarm") return creatureMotion(threat, rawProgress, timeRatio);
+    return projectileMotion(threat, rawProgress, timeRatio);
+  }
+
+  function threatDisplayClass(threat = {}) {
+    if (threat.type === "swarm") return "creature";
+    if (threat.type === "turret") return "projectile";
+    return "projectile";
+  }
+
+  function threatUnitSize(snapshot, threat = {}) {
+    const min = Math.min(snapshot.width, snapshot.height);
+    if (threat.type === "swarm") return clamp(min * 0.055, 34, 58);
+    return clamp(min * 0.047, 28, 48);
+  }
+
+  function deviceSize(snapshot) {
+    return clamp(Math.min(snapshot.width, snapshot.height) * 0.105, 72, 118);
+  }
+
+  function muzzlePoint(start, shield, distance) {
+    const angle = angleBetween(start, shield);
+    return {
+      x: start.x + Math.cos(angle) * distance,
+      y: start.y + Math.sin(angle) * distance
     };
   }
 
@@ -298,34 +320,35 @@
       const isCleared = this.cleared.has(threat.id) || step < activeStep;
       const taxonomy = threatTaxonomy(threat);
       const delta = Math.max(0, step - activeStep);
+      const pressure = 1 - clamp(snapshot.timeRatio || 1, 0, 1);
       let t = 0.08;
       let alpha = 0.78;
-      let scale = actor.baseScale * 0.9;
+      let scale = actor.baseScale;
       let visible = true;
-      let motion = { phase: "queued", shake: 0, frameBias: 0, scaleBoost: 0 };
+      let motion = { phase: "queued", shake: 0, frameBias: 0, scaleBoost: 0, pathStyle: actor.displayClass };
       if (snapshot.introActive) {
         t = clamp(0.04 + step * 0.018, 0.04, 0.18);
-        alpha = step < 2 ? 0.34 : 0;
-        scale = actor.baseScale * 0.42;
+        alpha = step < 2 ? 0.26 : 0;
+        scale = actor.baseScale * 0.7;
         visible = step < 2;
       } else if (isCleared) {
         t = 0.9;
         alpha = 0;
-        scale = actor.baseScale * 0.48;
+        scale = actor.baseScale * 0.72;
         visible = false;
       } else if (isActive) {
         const progress = clamp(snapshot.threatProgress || 0, 0, 1);
-        const pressure = 1 - clamp(snapshot.timeRatio || 0, 0, 1);
         motion = attackMotion(threat, progress, snapshot.timeRatio);
-        const pounceBoost = actor.pounceBoost || 0;
-        t = clamp(motion.t + pounceBoost * 0.075, 0.04, 0.995);
+        const rushBoost = actor.rushBoost || 0;
+        t = clamp(motion.t + rushBoost * (actor.displayClass === "creature" ? 0.055 : 0.035), 0.04, 0.995);
         alpha = 1;
-        scale = actor.baseScale * (1.0 + motion.scaleBoost + pressure * 0.12 + pounceBoost * 0.18);
+        const maxBoost = actor.displayClass === "creature" ? 0.32 : 0.18;
+        scale = actor.baseScale * (1 + Math.min(maxBoost, motion.scaleBoost + rushBoost * 0.06));
       } else {
-        visible = delta <= 2;
+        visible = delta <= 1 && taxonomy !== "device";
         t = clamp(0.025 + delta * 0.028, 0.025, 0.09);
-        alpha = visible ? (delta === 1 ? 0.34 : 0.16) : 0;
-        scale = actor.baseScale * (delta === 1 ? 0.46 : 0.32);
+        alpha = visible ? 0.2 : 0;
+        scale = actor.baseScale * 0.72;
         motion.phase = `queued-${delta}`;
       }
       if (taxonomy === "device" && !isActive) {
@@ -334,23 +357,23 @@
       }
 
       const sideBend = String(threat.lane || "").startsWith("left") ? -1 : 1;
-      const laneBend = Math.min(snapshot.width, snapshot.height) * 0.12 * sideBend * (threat.type === "swarm" ? 1.1 : threat.type === "turret" ? 0.55 : 0.82);
-      const pos = isActive ? curvedPoint(start, shield, t, laneBend) : pointAt(start, shield, t);
+      const travelStart = taxonomy === "device" ? muzzlePoint(start, shield, actor.deviceSize * 0.34) : start;
+      const laneBend = Math.min(snapshot.width, snapshot.height) * 0.06 * sideBend;
+      const pos = actor.displayClass === "creature" && isActive
+        ? curvedPoint(travelStart, shield, t, laneBend)
+        : pointAt(travelStart, shield, t);
       const normal = angleBetween(start, shield) + Math.PI / 2;
-      const queueOffset = isActive ? 0 : ((step % 2 ? 1 : -1) * Math.min(18, 8 + delta * 4));
-      const pressure = 1 - clamp(snapshot.timeRatio || 1, 0, 1);
-      const forwardAngle = angleBetween(pos, shield);
-      const pounceDrive = isActive ? Math.pow(pressure, 2.8) * Math.min(snapshot.width, snapshot.height) * 0.062 : 0;
-      const impactJitter = isActive
-        ? Math.sin(this.scene.time.now / (threat.type === "swarm" ? 24 : 38) + step * 1.7) * (motion.shake || 0)
-        : Math.sin(this.scene.time.now / 280 + step) * 2;
-      const swarmStep = isActive && threat.type === "swarm"
-        ? Math.sin(this.scene.time.now / 22 + step * 2.9) * (5 + pressure * 10)
-        : 0;
-      pos.x += Math.cos(normal) * (queueOffset + impactJitter + swarmStep);
-      pos.y += Math.sin(normal) * (queueOffset + impactJitter - swarmStep * 0.35);
-      pos.x += Math.cos(forwardAngle) * pounceDrive;
-      pos.y += Math.sin(forwardAngle) * pounceDrive;
+      if (isActive && actor.displayClass === "creature") {
+        const crawl = motion.phase === "crawl" ? Math.sin(this.scene.time.now / 38 + step) * motion.shake : 0;
+        const lunge = motion.phase === "lunge" ? Math.pow(pressure, 2.2) * Math.min(snapshot.width, snapshot.height) * 0.028 : 0;
+        const forwardAngle = angleBetween(pos, shield);
+        pos.x += Math.cos(normal) * crawl + Math.cos(forwardAngle) * lunge;
+        pos.y += Math.sin(normal) * crawl * 0.42 + Math.sin(forwardAngle) * lunge;
+      } else if (!isActive && visible) {
+        const queueOffset = (step % 2 ? 1 : -1) * Math.min(10, 4 + delta * 3);
+        pos.x += Math.cos(normal) * queueOffset;
+        pos.y += Math.sin(normal) * queueOffset;
+      }
 
       actor.container.setVisible(visible);
       actor.container.setPosition(pos.x, pos.y);
@@ -358,38 +381,9 @@
       actor.container.setScale(scale);
       actor.targetScale = scale;
       const faceAngle = angleBetween(pos, shield);
-      actor.container.setRotation(threat.type === "swarm" ? 0 : faceAngle);
+      actor.container.setRotation(actor.displayClass === "projectile" ? faceAngle : 0);
       actor.container.setDepth(isActive ? 125 : 86 - Math.min(30, delta));
-      if (actor.sprite?.setFrame) {
-        const frames = getThreatFramesForType(actor.mobileType || mobileThreatType(threat));
-        const activeFrames = frames.slice(0, Math.max(1, Math.min(3, frames.length - 1 || frames.length)));
-        const usableFrames = activeFrames.length ? activeFrames : frames;
-        const frameRate = threat.type === "swarm" ? 58 : threat.type === "turret" ? 118 : 72;
-        const animatedIndex = Math.floor((this.scene.time.now / frameRate + pressure * 2 + (motion.frameBias || 0)) % usableFrames.length);
-        const frameIndex = isActive ? animatedIndex : 0;
-        actor.sprite.setFrame(usableFrames[frameIndex] || usableFrames[0]);
-        actor.sprite.setAlpha(isActive ? 1 : 0.9);
-        actor.sprite.x = isActive ? Math.sin(this.scene.time.now / (threat.type === "swarm" ? 20 : 42) + step) * (threat.type === "swarm" ? 7 : 2.5) * pressure : 0;
-        actor.sprite.y = isActive
-          ? -Math.pow(pressure, 2) * (threat.type === "swarm" ? 14 : 10) + Math.sin(this.scene.time.now / 34 + step) * (threat.type === "swarm" ? 4 : 1.5) * pressure
-          : 0;
-        actor.sprite.setRotation(threat.type === "turret" ? 0 : threat.type === "swarm" ? Math.sin(this.scene.time.now / 80) * 0.06 * pressure : 0);
-      }
-      if (actor.swarmUnits?.length) {
-        const frames = getThreatFramesForType("swarm");
-        const unitPressure = isActive ? pressure : 0;
-        actor.swarmUnits.forEach((unit, index) => {
-          const offsetAngle = (Math.PI * 2 * index) / actor.swarmUnits.length + this.scene.time.now / 180;
-          const crawl = isActive ? Math.sin(this.scene.time.now / (26 + index * 4) + index) : 0;
-          unit.setFrame(frames[(isActive ? Math.floor(this.scene.time.now / 62 + index + (motion.frameBias || 0)) : index) % frames.length] || frames[0]);
-          unit.setPosition(
-            Math.cos(offsetAngle) * (actor.swarmRadius * (0.62 + unitPressure * 0.16)) + crawl * 2.5,
-            Math.sin(offsetAngle) * (actor.swarmRadius * (0.42 + unitPressure * 0.1)) - unitPressure * 8
-          );
-          unit.setScale(1 + unitPressure * 0.18 + Math.sin(this.scene.time.now / 90 + index) * 0.035);
-          unit.setRotation(Math.sin(this.scene.time.now / 70 + index) * 0.1 * unitPressure);
-        });
-      }
+      this.updateMobileVisual(actor, threat, motion, isActive, pressure);
       if (actor.device) {
         const deviceVisible = taxonomy === "device" && !isCleared && (isActive || delta <= 1);
         const deviceAlpha = deviceVisible ? (isActive ? 0.95 : 0.42) : 0;
@@ -397,18 +391,11 @@
         actor.device.setPosition(start.x, start.y);
         actor.device.setAlpha(deviceAlpha);
         actor.device.setDepth(isActive ? 94 : 70);
-        actor.device.setScale(isActive ? actor.deviceBaseScale * (1 + pressure * 0.08) : actor.deviceBaseScale * 0.86);
-        if (actor.deviceSprite?.setFrame) {
-          const deviceFrames = getThreatFramesForType("turret");
-          const deviceFrame = isActive
-            ? deviceFrames[Math.min(deviceFrames.length - 1, Math.max(0, Math.floor(pressure * deviceFrames.length)))]
-            : deviceFrames[0];
-          actor.deviceSprite.setFrame(deviceFrame || 0);
-        }
+        this.updateDeviceVisual(actor, threat, isActive ? deviceMotion(threat, clamp(snapshot.threatProgress || 0, 0, 1)) : null, pressure);
       }
       if (actor.shadow) {
         actor.shadow.setAlpha(isActive ? 0.36 : 0.22);
-        actor.shadow.setScale(isActive ? 1.16 : 0.9);
+        actor.shadow.setScale(isActive ? 1.08 : 0.9);
       }
       if (actor.homePulse) {
         actor.homePulse.setAlpha(threat.homePulse && !isCleared ? (isActive ? 0.8 : 0.34) : 0);
@@ -420,72 +407,41 @@
       actor.status = isActive ? "active" : isCleared ? "cleared" : "queued";
       actor.visibleTier = visible ? (isActive ? "active" : `queued-${delta}`) : "hidden";
       actor.motionPhase = isActive ? motion.phase : actor.visibleTier;
+      actor.pathStyle = isActive ? motion.pathStyle : actor.displayClass;
       actor.taxonomy = taxonomy;
       actor.distanceToShield = Math.hypot(actor.container.x - shield.x, actor.container.y - shield.y);
+      actor.approxSize = actor.unitSize * scale;
     }
 
     createActor(threat, snapshot) {
       const container = this.scene.add.container(0, 0);
       const min = Math.min(snapshot.width, snapshot.height);
       const taxonomy = threatTaxonomy(threat);
+      const displayClass = threatDisplayClass(threat);
       const visualType = mobileThreatType(threat);
-      const baseSize = visualType === "swarm" ? min * 0.13 : min * (taxonomy === "device" ? 0.105 : 0.115);
+      const unitSize = threatUnitSize(snapshot, threat);
       const visual = threatVisual(threat);
       let sprite = null;
-      const shadow = this.scene.add.ellipse(0, baseSize * 0.28, baseSize * 0.86, baseSize * 0.18, 0x000000, 0.28);
-      const aura = this.scene.add.ellipse(0, baseSize * 0.06, baseSize * 0.66, baseSize * 0.28, visual.color, 0.04);
+      const shadow = this.scene.add.ellipse(0, unitSize * 0.28, unitSize * 0.86, unitSize * 0.16, 0x000000, 0.28);
+      const aura = this.scene.add.ellipse(0, unitSize * 0.02, unitSize * 0.72, unitSize * 0.3, visual.color, 0.045);
       container.add(shadow);
       container.add(aura);
       const swarmUnits = [];
-      if (this.scene.textures.exists(TEXTURES.threats)) {
-        const frames = getThreatFramesForType(visualType);
-        if (visualType === "swarm") {
-          const unitCount = 4;
-          const unitSize = baseSize * 0.78;
-          for (let index = 0; index < unitCount; index += 1) {
-            const unit = this.scene.add.sprite(0, 0, TEXTURES.threats, frames[index % frames.length] || frames[0] || 0);
-            unit.setDisplaySize(unitSize, unitSize);
-            unit.setAlpha(0.94);
-            swarmUnits.push(unit);
-            container.add(unit);
-          }
-        } else {
-          sprite = this.scene.add.sprite(0, 0, TEXTURES.threats, frames[0] || 0);
-          sprite.setDisplaySize(baseSize * 1.3, baseSize * 1.3);
-          sprite.setAlpha(0.98);
-          if (threat.homePulse || threat.type === "anchor") sprite.setTint(0xc9fff0);
-          container.add(sprite);
-        }
-      } else {
-        const g = this.scene.add.graphics();
-        const half = baseSize * 0.5;
-        g.fillStyle(visual.dark, 0.94);
-        g.fillEllipse(0, 0, half * 0.95, half * 0.58);
-        g.fillStyle(visual.color, 0.96);
-        g.fillCircle(half * 0.18, 0, Math.max(8, half * 0.1));
-        g.fillStyle(visual.accent, 0.8);
-        g.fillCircle(-half * 0.18, -half * 0.1, Math.max(5, half * 0.07));
-        g.fillCircle(-half * 0.24, half * 0.12, Math.max(4, half * 0.055));
-        container.add(g);
-      }
+      if (displayClass === "creature") this.createCreatureSwarmActor(container, swarmUnits, threat, visual, unitSize);
+      else sprite = this.createProjectileActor(container, threat, visual, unitSize);
       let device = null;
       let deviceSprite = null;
       let deviceBaseScale = 1;
-      if (taxonomy === "device" && this.scene.textures.exists(TEXTURES.threats)) {
-        const deviceFrames = getThreatFramesForType("turret");
-        const deviceSize = min * 0.18;
-        device = this.scene.add.container(0, 0);
-        const deviceShadow = this.scene.add.ellipse(0, deviceSize * 0.27, deviceSize * 0.7, deviceSize * 0.18, 0x000000, 0.32);
-        const deviceGlow = this.scene.add.ellipse(0, deviceSize * 0.04, deviceSize * 0.54, deviceSize * 0.22, visual.color, 0.08);
-        deviceSprite = this.scene.add.sprite(0, 0, TEXTURES.threats, deviceFrames[0] || 0);
-        deviceSprite.setDisplaySize(deviceSize, deviceSize);
-        device.add([deviceShadow, deviceGlow, deviceSprite]);
-        device.setAlpha(0);
-        this.scene.layers.actors.add(device);
+      const fixedDeviceSize = deviceSize(snapshot);
+      if (taxonomy === "device") {
+        const createdDevice = this.createDeviceActor(threat, visual, fixedDeviceSize);
+        device = createdDevice.device;
+        deviceSprite = createdDevice.deviceSprite;
+        deviceBaseScale = createdDevice.deviceBaseScale;
       }
       let homePulse = null;
       if (threat.homePulse || threat.type === "anchor") {
-        homePulse = this.scene.add.ellipse(0, baseSize * 0.02, baseSize * 0.34, baseSize * 0.2, 0x62ff9d, 0.12);
+        homePulse = this.scene.add.ellipse(0, unitSize * 0.02, unitSize * 0.34, unitSize * 0.2, 0x62ff9d, 0.12);
         homePulse.setAlpha(0.16);
         container.add(homePulse);
       }
@@ -503,13 +459,140 @@
         threat,
         taxonomy,
         mobileType: visualType,
-        swarmRadius: baseSize * 0.34,
+        displayClass,
+        unitSize,
+        deviceSize: fixedDeviceSize,
+        swarmRadius: unitSize * 0.74,
         baseScale: 1,
         targetScale: 1,
         status: "queued",
         visibleTier: "queued",
+        pathStyle: displayClass,
+        approxSize: unitSize,
         lastTrailAt: 0
       };
+    }
+
+    createProjectileActor(container, threat, visual, unitSize) {
+      let sprite = null;
+      const flame = this.scene.add.ellipse(-unitSize * 0.46, 0, unitSize * 0.46, unitSize * 0.16, visual.accent, 0.62);
+      const coreGlow = this.scene.add.ellipse(0, 0, unitSize * 0.92, unitSize * 0.34, visual.color, 0.2);
+      container.add([flame, coreGlow]);
+      if (this.scene.textures.exists(TEXTURES.threats)) {
+        const frames = getThreatFramesForType(mobileThreatType(threat));
+        sprite = this.scene.add.sprite(0, 0, TEXTURES.threats, frames[0] || 0);
+        sprite.setDisplaySize(unitSize * 1.18, unitSize * 1.18);
+        sprite.setAlpha(0.98);
+        if (threat.homePulse || threat.type === "anchor") sprite.setTint(0xc9fff0);
+        container.add(sprite);
+      } else {
+        const g = this.scene.add.graphics();
+        g.fillStyle(visual.dark, 0.95);
+        g.fillRoundedRect(-unitSize * 0.42, -unitSize * 0.14, unitSize * 0.74, unitSize * 0.28, unitSize * 0.12);
+        g.fillStyle(visual.color, 0.96);
+        g.fillCircle(unitSize * 0.26, 0, unitSize * 0.13);
+        g.fillStyle(visual.accent, 0.82);
+        g.fillTriangle(-unitSize * 0.4, 0, -unitSize * 0.7, -unitSize * 0.16, -unitSize * 0.7, unitSize * 0.16);
+        container.add(g);
+      }
+      return sprite;
+    }
+
+    createCreatureSwarmActor(container, swarmUnits, threat, visual, unitSize) {
+      const frames = getThreatFramesForType("swarm");
+      const unitCount = 5;
+      for (let index = 0; index < unitCount; index += 1) {
+        let unit;
+        if (this.scene.textures.exists(TEXTURES.threats)) {
+          unit = this.scene.add.sprite(0, 0, TEXTURES.threats, frames[index % frames.length] || frames[0] || 0);
+          unit.setDisplaySize(unitSize * 0.92, unitSize * 0.92);
+        } else {
+          unit = this.scene.add.graphics();
+          unit.fillStyle(index % 2 ? visual.color : visual.accent, 0.94);
+          unit.fillEllipse(0, 0, unitSize * 0.62, unitSize * 0.38);
+          unit.fillStyle(visual.dark, 0.88);
+          unit.fillCircle(unitSize * 0.14, -unitSize * 0.04, unitSize * 0.07);
+        }
+        unit.setAlpha?.(0.94);
+        unit.seed = index * 1.73;
+        swarmUnits.push(unit);
+        container.add(unit);
+      }
+    }
+
+    createDeviceActor(threat, visual, size) {
+      const device = this.scene.add.container(0, 0);
+      const deviceShadow = this.scene.add.ellipse(0, size * 0.28, size * 0.72, size * 0.16, 0x000000, 0.34);
+      const deviceGlow = this.scene.add.ellipse(0, size * 0.04, size * 0.58, size * 0.24, visual.color, 0.08);
+      let deviceSprite = null;
+      if (this.scene.textures.exists(TEXTURES.threats)) {
+        const deviceFrames = getThreatFramesForType("turret");
+        deviceSprite = this.scene.add.sprite(0, 0, TEXTURES.threats, deviceFrames[0] || 0);
+        deviceSprite.setDisplaySize(size, size);
+      } else {
+        deviceSprite = this.scene.add.graphics();
+        deviceSprite.fillStyle(visual.dark, 0.96);
+        deviceSprite.fillRoundedRect(-size * 0.28, -size * 0.22, size * 0.56, size * 0.44, size * 0.08);
+        deviceSprite.fillStyle(visual.color, 0.92);
+        deviceSprite.fillCircle(size * 0.08, 0, size * 0.1);
+      }
+      const muzzle = this.scene.add.ellipse(size * 0.23, 0, size * 0.22, size * 0.12, visual.accent, 0.42);
+      const charge = this.scene.add.ellipse(size * 0.08, 0, size * 0.42, size * 0.26, visual.color, 0.14);
+      device.add([deviceShadow, deviceGlow, deviceSprite, charge, muzzle]);
+      device.setAlpha(0);
+      device.muzzle = muzzle;
+      device.charge = charge;
+      this.scene.layers.actors.add(device);
+      return { device, deviceSprite, deviceBaseScale: 1 };
+    }
+
+    updateMobileVisual(actor, threat, motion, isActive, pressure) {
+      if (actor.sprite?.setFrame) {
+        const frames = getThreatFramesForType(actor.mobileType || mobileThreatType(threat));
+        const usableFrames = frames.length ? frames : [0];
+        const frameIndex = isActive ? Math.min(usableFrames.length - 1, Math.max(0, motion.frameBias || 0)) : 0;
+        actor.sprite.setFrame(usableFrames[frameIndex] || usableFrames[0]);
+        actor.sprite.setAlpha(isActive ? 1 : 0.72);
+        actor.sprite.setPosition(0, 0);
+        actor.sprite.setRotation(0);
+      }
+      if (actor.swarmUnits?.length) {
+        const frames = getThreatFramesForType("swarm");
+        actor.swarmUnits.forEach((unit, index) => {
+          const phase = (motion.phase || "").startsWith("queued") ? "queued" : motion.phase;
+          const row = index % 2;
+          const baseX = (index - 2) * actor.unitSize * 0.34;
+          const crawl = isActive ? Math.sin(this.scene.time.now / (58 + index * 5) + unit.seed) * actor.unitSize * 0.12 : 0;
+          const lunge = phase === "lunge" ? -Math.pow(pressure, 2) * actor.unitSize * (0.22 + index * 0.025) : 0;
+          unit.setFrame?.(frames[(isActive ? Math.floor(this.scene.time.now / 72 + index + (motion.frameBias || 0)) : index) % frames.length] || frames[0]);
+          unit.setPosition(baseX + crawl, (row ? 1 : -1) * actor.unitSize * 0.16 + lunge);
+          unit.setScale?.(1 + (isActive ? pressure * 0.12 : 0));
+          unit.setRotation?.(Math.sin(this.scene.time.now / 86 + index) * (isActive ? 0.08 : 0.02));
+          unit.setAlpha?.(isActive ? 0.96 : 0.58);
+        });
+      }
+      if (actor.aura) actor.aura.setAlpha(isActive ? (actor.displayClass === "creature" ? 0.11 : 0.07) : 0.035);
+    }
+
+    updateDeviceVisual(actor, threat, motion, pressure) {
+      const device = actor.device;
+      if (!device) return;
+      device.setScale(actor.deviceBaseScale * (1 + pressure * 0.04));
+      const faceAngle = angleBetween(lanePoint(this.scene.snapshot, threat.lane), shieldPoint(this.scene.snapshot, threat.lane));
+      device.setRotation(faceAngle);
+      if (actor.deviceSprite?.setFrame) {
+        const deviceFrames = getThreatFramesForType("turret");
+        const frameBias = motion ? motion.frameBias || 0 : 0;
+        actor.deviceSprite.setFrame(deviceFrames[Math.min(deviceFrames.length - 1, frameBias)] || deviceFrames[0]);
+      }
+      if (device.charge) {
+        device.charge.setAlpha(motion ? motion.chargeAlpha : 0.12);
+        device.charge.setScale(motion ? motion.muzzleScale : 0.82);
+      }
+      if (device.muzzle) {
+        device.muzzle.setAlpha(motion ? 0.42 + pressure * 0.32 : 0.18);
+        device.muzzle.setScale(motion ? motion.muzzleScale : 0.76);
+      }
     }
 
     drawActiveLane(snapshot) {
@@ -521,7 +604,7 @@
       this.activeId = threat.id;
       const actor = this.actors.get(threat.id);
       if (!actor) return;
-      actor.pounceBoost = 0;
+      actor.rushBoost = 0;
       this.scene.tweens.killTweensOf(actor.container);
       this.scene.tweens.add({
         targets: actor.container,
@@ -537,21 +620,22 @@
     pounce(threat) {
       const actor = threat ? this.actors.get(threat.id) : null;
       if (!actor || this.scene.snapshot.reducedMotion) return;
-      actor.pounceBoost = Math.max(actor.pounceBoost || 0, threat?.type === "turret" ? 1.25 : 1);
+      actor.rushBoost = Math.max(actor.rushBoost || 0, actor.displayClass === "creature" ? 1 : 0.72);
       this.scene.tweens.killTweensOf(actor.container);
+      const scaleBoost = actor.displayClass === "creature" ? 1.14 : 1.05;
       this.scene.tweens.add({
         targets: actor.container,
-        scaleX: (actor.targetScale || actor.baseScale) * 1.22,
-        scaleY: (actor.targetScale || actor.baseScale) * 1.22,
-        duration: 70,
+        scaleX: (actor.targetScale || actor.baseScale) * scaleBoost,
+        scaleY: (actor.targetScale || actor.baseScale) * scaleBoost,
+        duration: actor.displayClass === "creature" ? 82 : 56,
         yoyo: true,
-        ease: "Back.easeOut"
+        ease: "Cubic.easeOut"
       });
       if (actor.sprite) {
         this.scene.tweens.add({
           targets: actor.sprite,
-          y: actor.sprite.y - 12,
-          duration: 70,
+          alpha: 0.68,
+          duration: 48,
           yoyo: true,
           ease: "Cubic.easeOut"
         });
@@ -567,16 +651,18 @@
         this.scene.tweens.killTweensOf(actor.container);
         const frames = getThreatFramesForType(actor.mobileType || mobileThreatType(threat));
         if (actor.sprite?.setFrame && frames.length) actor.sprite.setFrame(frames[frames.length - 1]);
+        const exitScale = actor.displayClass === "creature" ? 1.12 : 0.82;
         this.scene.tweens.add({
           targets: actor.container,
           alpha: 0,
-          scaleX: actor.baseScale * 1.44,
-          scaleY: actor.baseScale * 1.44,
-          duration: 180,
+          scaleX: actor.baseScale * exitScale,
+          scaleY: actor.baseScale * exitScale,
+          duration: actor.displayClass === "creature" ? 190 : 120,
           ease: "Cubic.easeOut"
         });
       }
-      this.burstAt(target.x, target.y, threatVisual(threat).accent, anchor ? 0.55 : 1);
+      const displayClass = actor?.displayClass || threatDisplayClass(threat);
+      this.burstAt(target.x, target.y, threatVisual(threat).accent, anchor ? 0.55 : displayClass === "creature" ? 0.9 : 0.72);
       return target;
     }
 
@@ -586,15 +672,16 @@
       if (!actor || snapshot.reducedMotion) return;
       const shield = shieldPoint(snapshot, threat.lane);
       const current = { x: actor.container.x, y: actor.container.y };
-      const next = pointAt(current, shield, threat?.rhythmId === "overdrive" ? 0.26 : 0.18);
+      const next = pointAt(current, shield, actor.displayClass === "creature" ? 0.18 : 0.12);
+      actor.rushBoost = Math.max(actor.rushBoost || 0, actor.displayClass === "creature" ? 0.85 : 0.45);
       this.scene.tweens.killTweensOf(actor.container);
       this.scene.tweens.add({
         targets: actor.container,
         x: next.x,
         y: next.y,
-        duration: 90,
-        yoyo: true,
-        ease: "Back.easeOut"
+        duration: actor.displayClass === "creature" ? 90 : 64,
+        yoyo: actor.displayClass !== "projectile",
+        ease: "Cubic.easeOut"
       });
     }
 
@@ -612,9 +699,9 @@
           x: target.x,
           y: target.y,
           alpha: 0,
-          scaleX: actor.baseScale * 0.45,
-          scaleY: actor.baseScale * 0.45,
-          duration: 150,
+          scaleX: actor.baseScale * (actor.displayClass === "creature" ? 0.58 : 0.38),
+          scaleY: actor.baseScale * (actor.displayClass === "creature" ? 0.58 : 0.38),
+          duration: actor.displayClass === "creature" ? 170 : 115,
           ease: "Cubic.easeIn"
         });
       }
@@ -680,12 +767,7 @@
           actor.lastTrailAt = this.scene.time.now;
           this.emitThreatTrail(actor);
         }
-        actor.pounceBoost = Math.max(0, (actor.pounceBoost || 0) * 0.86 - 0.015);
-        if (actor.threat.type === "turret" && !snapshot.reducedMotion) {
-          const pressure = 1 - clamp(snapshot.timeRatio || 1, 0, 1);
-          actor.container.scaleX = (actor.targetScale || actor.baseScale) * (1 + Math.sin(this.scene.time.now / 72) * (0.035 + pressure * 0.04));
-          actor.container.scaleY = actor.container.scaleX;
-        }
+        actor.rushBoost = Math.max(0, (actor.rushBoost || 0) * 0.82 - 0.02);
       });
     }
 
@@ -696,15 +778,15 @@
       const start = lanePoint(snapshot, threat.lane);
       const current = { x: actor.container.x, y: actor.container.y };
       const angle = angleBetween(start, current);
-      const count = threat.type === "swarm" ? 2 : 3;
+      const count = actor.displayClass === "creature" ? 2 : 4;
       for (let i = 0; i < count; i += 1) {
         const dot = this.scene.add.ellipse(
-          current.x - Math.cos(angle) * (18 + i * 9),
-          current.y - Math.sin(angle) * (18 + i * 9) + (i % 2 ? 4 : -4),
-          threat.type === "projectile" ? 13 - i * 2 : 8 - i,
-          threat.type === "projectile" ? 5 : 4,
+          current.x - Math.cos(angle) * (14 + i * 8),
+          current.y - Math.sin(angle) * (14 + i * 8) + (actor.displayClass === "creature" ? (i % 2 ? 3 : -3) : 0),
+          actor.displayClass === "projectile" ? 10 - i * 1.5 : 6 - i,
+          actor.displayClass === "projectile" ? 3.5 : 3,
           i % 2 ? visual.color : visual.accent,
-          threat.type === "turret" ? 0.18 : 0.26
+          actor.displayClass === "projectile" ? 0.32 : 0.2
         );
         dot.setRotation(angle);
         this.scene.layers.vfx.add(dot);
@@ -728,6 +810,9 @@
       let activeDistanceToShield = 0;
       let activeMobileType = "";
       let activeTaxonomy = "";
+      let activeDisplayClass = "";
+      let activePathStyle = "";
+      let activeApproxSize = 0;
       let visibleDeviceCount = 0;
       this.actors.forEach((actor) => {
         const visible = Boolean(actor.container?.visible && actor.container.alpha > 0.05);
@@ -740,6 +825,9 @@
           activeDistanceToShield = actor.distanceToShield || 0;
           activeMobileType = actor.mobileType || "";
           activeTaxonomy = actor.taxonomy || "";
+          activeDisplayClass = actor.displayClass || "";
+          activePathStyle = actor.pathStyle || "";
+          activeApproxSize = actor.approxSize || 0;
         }
       });
       return {
@@ -751,13 +839,16 @@
         activeId: this.activeId,
         activeMobileType,
         activeTaxonomy,
+        activeDisplayClass,
+        activePathStyle,
+        activeApproxSize,
         visibleDeviceCount,
         roundKey: this.roundKey,
         aggressiveMotion: true,
-        motionVersion: "pounce-v08",
+        motionVersion: "ballistic-v09",
         activeMotionPhase,
         activeDistanceToShield,
-        activePounceBoost: this.actors.get(this.activeId)?.pounceBoost || 0
+        activeRushBoost: this.actors.get(this.activeId)?.rushBoost || 0
       };
     }
   }

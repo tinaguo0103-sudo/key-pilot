@@ -183,6 +183,17 @@
           swarm: "creature",
           projectile: "projectile"
         },
+        roles: {
+          turret: "fixedSpawner",
+          swarm: "multiUnitCreature",
+          projectile: "ballisticThreat"
+        },
+        motionVersion: "ballistic-v09",
+        mobileDisplay: {
+          turret: "projectile",
+          swarm: "creature",
+          projectile: "projectile"
+        },
         frameWidth: 362,
         frameHeight: 362,
         columns: 4,

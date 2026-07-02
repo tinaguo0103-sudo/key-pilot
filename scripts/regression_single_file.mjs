@@ -387,10 +387,17 @@ async function assertCruiseBattleObjectsReady(page, label = "03 battle objects")
   assert(roundSize > 0, `${label}: current round should expose a positive size`);
   assert(actorCount === roundSize, `${label}: wave actors should match round size, got ${actorCount}/${roundSize}`);
   assert(visibleCount >= 1 && visibleCount <= Math.min(3, roundSize), `${label}: visible wave actors should be active plus near queue only, got ${visibleCount}/${roundSize}`);
-  assert(sceneDebug.wave?.aggressiveMotion === true, `${label}: wave controller should use the aggressive pounce motion system`);
-  assert(sceneDebug.wave?.motionVersion === "pounce-v08", `${label}: expected pounce-v08 motion, got ${sceneDebug.wave?.motionVersion}`);
+  assert(sceneDebug.wave?.aggressiveMotion === true, `${label}: wave controller should use the active threat motion system`);
+  assert(sceneDebug.wave?.motionVersion === "ballistic-v09", `${label}: expected ballistic-v09 motion, got ${sceneDebug.wave?.motionVersion}`);
   assert((sceneDebug.wave?.staleClearedVisible || 0) === 0, `${label}: cleared threats should not remain visible, got ${sceneDebug.wave?.staleClearedVisible}`);
   assert(sceneDebug.wave?.activeMobileType !== "turret", `${label}: turret must be a fixed device, not the moving threat actor`);
+  if (!sceneDebug.introActive && sceneDebug.wave?.activeDisplayClass === "projectile") {
+    assert(sceneDebug.wave?.activePathStyle === "ballistic", `${label}: projectile should use a ballistic path, got ${sceneDebug.wave?.activePathStyle}`);
+    assert((sceneDebug.wave?.activeApproxSize || 0) <= 72, `${label}: projectile is oversized, got ${sceneDebug.wave?.activeApproxSize}`);
+  }
+  if (!sceneDebug.introActive && sceneDebug.wave?.activeDisplayClass === "creature") {
+    assert((sceneDebug.wave?.activeApproxSize || 0) <= 88, `${label}: creature swarm units are oversized, got ${sceneDebug.wave?.activeApproxSize}`);
+  }
   if (sceneDebug.wave?.activeTaxonomy === "device") {
     assert((sceneDebug.wave?.visibleDeviceCount || 0) >= 1, `${label}: device threats should keep the turret fixed at the wall`);
   }
